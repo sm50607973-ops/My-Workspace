@@ -299,7 +299,7 @@ const VoiceButton = ({ onSpeech }) => { const { isListening, startListening, isS
   return <button onClick={startListening} className={`p-3 rounded-xl transition-all ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{isListening ? <MicOff size={18}/> : <Mic size={18}/>}</button>; };
 
 const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'danger' }) => { if (!isOpen) return null;
-  const isDanger = type === 'danger'; return ( <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn" onClick={onClose}><div className="bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm border border-white/10 p-6 transform transition-all scale-100" onClick={e => e.stopPropagation()}><div className="flex items-center gap-3 mb-4"><div className={`p-3 rounded-full ${isDanger ? 'bg-red-500/20 text-red-500' : 'bg-indigo-500/20 text-indigo-400'}`}>{isDanger ? <AlertTriangle size={24}/> : <CheckCircle2 size={24}/>}</div><h3 className="text-lg font-bold text-slate-200">{title}</h3></div><p className="text-slate-400 text-sm mb-6 leading-relaxed whitespace-pre-wrap">{message}</p><div className="flex gap-3"><button onClick={onClose} className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-400 font-bold hover:bg-slate-700 transition-colors">취소</button><button onClick={onConfirm} className={`flex-1 py-3 rounded-xl font-bold text-white transition-colors ${isDanger ? 'bg-red-600 hover:bg-red-500' : 'bg-indigo-600 hover:bg-indigo-500'}`}>확인</button></div></div></div> );
+  const isDanger = type === 'danger'; return ( <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn" onClick={onClose}><div className="bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm border border-white/10 p-6 transform transition-all scale-100" onClick={e => e.stopPropagation()}><div className="flex items-center gap-3 mb-4"><div className={`p-3 rounded-full ${isDanger ? 'bg-red-500/20 text-red-500' : 'bg-indigo-500/20 text-indigo-400'}`}>{isDanger ? <AlertTriangle size={24}/> : <CheckCircle2 size={24}/>}</div><h3 className="text-lg font-bold text-slate-200">{title}</h3></div><p className="text-slate-400 text-sm mb-6 leading-relaxed whitespace-pre-wrap">{message}</p><div className="flex gap-3"><button onClick={onClose} className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-400 font-bold hover:bg-slate-700 transition-colors">취소</button><button onClick={onConfirm} className={`flex-1 py-3 rounded-xl font-bold text-white transition-colors ${isDanger ? 'bg-red-600 hover:bg-red-500' : 'bg-indigo-600 hover:bg-indigo-500'}`}>확인</button></div></div></div> );
 };
 
 const TimelineView = ({ projects, onClick, onDoubleClick, activeProjectId }) => { const validProjects = projects ? projects.filter(p => p.startDate && p.dueDate) : []; if (validProjects.length === 0) { return ( <div className="w-full h-full min-h-[300px] flex flex-col items-center justify-center text-slate-500 bg-slate-900/30 rounded-xl border border-white/5 animate-fadeIn"><div className="p-4 bg-slate-800/50 rounded-full mb-3"><Calendar size={32} className="opacity-50"/></div><p className="text-sm font-bold text-slate-300">일정이 설정된 프로젝트가 없습니다.</p><p className="text-xs mt-2 opacity-70">리스트에서 프로젝트를 더블클릭 후 [수정]하여</p><p className="text-xs opacity-70">'시작일'과 '완료 예정일'을 입력해주세요.</p></div> );
@@ -1830,7 +1830,6 @@ const filteredStudies = studies.filter(item =>
       </div>
 
       <FloatingActionButton onClick={() => setModalMode('CREATE_TASK')} />
-      <ConfirmModal isOpen={confirmState.isOpen} onClose={() => setConfirmState({ ...confirmState, isOpen: false })} onConfirm={executeConfirmAction} title={confirmState.type === 'DELETE' ? '업무 삭제' : '상태 변경'} message={confirmState.type === 'DELETE' ? `"${confirmState.task?.title}" 업무를 영구 삭제하시겠습니까?` : `"${confirmState.task?.title}" 업무 상태를 변경하시겠습니까?`} type={confirmState.type === 'DELETE' ? 'danger' : 'info'} />
       
       {/* Detail Modal: Project Create/Edit */}
       <DetailModal isOpen={modalMode === 'CREATE_PROJECT' || modalMode === 'EDIT_PROJECT'} onClose={() => setModalMode(null)} title={modalMode === 'EDIT_PROJECT' ? "프로젝트 수정" : "새 프로젝트 시작"} themeColor="blue">
@@ -2781,6 +2780,16 @@ const filteredStudies = studies.filter(item =>
             setSelectedItem(mindMapTargetProject);
             setModalMode('PROJECT_DETAIL');
         }}
+      />
+
+      {/* ConfirmModal을 여기(App 리턴문의 가장 끝부분)로 이동시켰습니다. */}
+      <ConfirmModal 
+        isOpen={confirmState.isOpen} 
+        onClose={() => setConfirmState({ ...confirmState, isOpen: false })} 
+        onConfirm={executeConfirmAction} 
+        title={confirmState.type === 'DELETE' ? '업무 삭제' : '상태 변경'} 
+        message={confirmState.type === 'DELETE' ? `"${confirmState.task?.title}" 업무를 영구 삭제하시겠습니까?` : `"${confirmState.task?.title}" 업무 상태를 변경하시겠습니까?`} 
+        type={confirmState.type === 'DELETE' ? 'danger' : 'info'} 
       />
 
     </div>
