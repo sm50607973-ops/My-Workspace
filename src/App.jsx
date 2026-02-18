@@ -2376,31 +2376,32 @@ const handleRevealPw = (bmId) => {
                    </div>
                 </div>
                 
-                <div className="flex gap-4">
-                    <div className="flex-1">
-                        <label className="block text-xs font-bold text-slate-500 mb-1">ID (계정)</label>
-                        <div className="flex gap-2">
-                           <div className="relative flex-1">
-                               <select value={bmUserId} onChange={(e) => setBmUserId(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-500 text-sm text-slate-200 outline-none appearance-none">
-                                  {bmSavedIds.length === 0 && <option value="">ID 없음</option>}
-                                  {bmSavedIds.map(id => <option key={id} value={id}>{id}</option>)}
-                               </select>
-                               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"/>
-                           </div>
-                           <button onClick={handleAddBmId} className="p-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-white hover:border-slate-500" title="ID 목록에 추가"><Plus size={16}/></button>
-                           <button onClick={handleDeleteBmId} className="p-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-red-400 hover:border-red-500" title="현재 ID 삭제"><Trash2 size={16}/></button>
+                {/* 3. ID (계정) */}
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 mb-1">ID (계정)</label>
+                   <div className="flex gap-2">
+                       <div className="relative flex-1">
+                           <select value={bmUserId} onChange={(e) => setBmUserId(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-500 text-sm text-slate-200 outline-none appearance-none">
+                              {bmSavedIds.length === 0 && <option value="">ID 없음</option>}
+                              {bmSavedIds.map(id => <option key={id} value={id}>{id}</option>)}
+                           </select>
+                           <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"/>
                        </div>
-                    </div>
-                    <div className="flex-1">
-                        <label className="block text-xs font-bold text-slate-500 mb-1">Password</label>
-                        <div className="relative">
-                            <input type="password" value={bmUserPw} onChange={(e) => setBmUserPw(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-500 text-sm text-slate-200 outline-none font-mono" placeholder="비밀번호"/>
-                            <Lock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"/>
-                        </div>
+                       <button onClick={handleAddBmId} className="p-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-white hover:border-slate-500" title="ID 목록에 추가"><Plus size={16}/></button>
+                       <button onClick={handleDeleteBmId} className="p-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-red-400 hover:border-red-500" title="현재 ID 삭제"><Trash2 size={16}/></button>
+                   </div>
+                </div>
+
+                {/* 4. Password (ID 밑으로 이동) */}
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Password</label>
+                    <div className="relative">
+                        <input type="password" value={bmUserPw} onChange={(e) => setBmUserPw(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-500 text-sm text-slate-200 outline-none font-mono" placeholder="비밀번호"/>
+                        <Lock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"/>
                     </div>
                 </div>
 
-                {/* 3. 제목 & URL & 설명 */}
+                {/* 5. 제목 & URL & 설명 */}
                 <div>
                    <label className="block text-xs font-bold text-slate-500 mb-1">사이트 명</label>
                    <input type="text" value={bmTitle} onChange={(e) => setBmTitle(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-500 text-sm text-slate-200 outline-none" placeholder="예: 디자인 레퍼런스 사이트"/>
@@ -2441,38 +2442,55 @@ const handleRevealPw = (bmId) => {
                      filteredBookmarks.map((bm) => {
                        const isWork = bm.context === 'WORK';
                        return (
-                          <div key={bm.id} className={`flex items-center gap-4 p-4 rounded-xl border transition-all group ${editingBmId === bm.id ? 'bg-yellow-500/10 border-yellow-500/50 ring-1 ring-yellow-500/30' : 'bg-slate-800/40 border-white/5 hover:bg-slate-800/60'} border-l-4 ${isWork ? 'border-l-indigo-500' : 'border-l-orange-500'}`}>
-                               <div className="flex flex-col items-center w-10 shrink-0">
-                                   <span className="text-lg">{isWork ? '🏢' : '🏠'}</span>
-                                   <span className={`text-[9px] font-bold ${isWork ? 'text-indigo-400' : 'text-orange-400'}`}>{isWork ? 'WORK' : 'LIFE'}</span>
-                               </div>
-                               <span className="text-xs font-bold text-slate-400 w-20 truncate bg-slate-700/30 px-2 py-1 rounded text-center">{bm.category}</span>
-                               <div className="flex-1 min-w-0">
-                                   <a href={bm.url} target="_blank" rel="noreferrer" className={`text-sm font-bold hover:underline truncate block flex items-center gap-1 text-slate-200 hover:text-yellow-400`}>
-                                       <ExternalLink size={12}/> {bm.title}
-                                   </a>
-                                   {bm.description && <p className="text-xs text-slate-500 truncate mt-0.5">{bm.description}</p>}
-                                   {(bm.userId || bm.password) && (
-                                       <div className="flex items-center gap-3 mt-1.5 text-xs bg-black/20 p-1.5 rounded-lg w-fit">
-                                           {bm.userId && <span className="font-mono text-slate-300 flex items-center gap-1"><User size={10} className="text-slate-500"/> {bm.userId}</span>}
-                                           {bm.password && (
-                                               <div className="flex items-center gap-2 border-l border-white/10 pl-2">
-                                                   <span className="font-mono text-slate-400">
-                                                       {revealedPwIds[bm.id] ? bm.password : "••••••"}
-                                                   </span>
-                                                   <button onClick={() => handleRevealPw(bm.id)} className="hover:text-yellow-400 text-slate-500 transition-colors" title="관리자 비밀번호 입력 후 보기">
-                                                       {revealedPwIds[bm.id] ? <EyeOff size={12}/> : <Eye size={12}/>}
-                                                   </button>
-                                               </div>
-                                           )}
-                                       </div>
-                                   )}
-                               </div>
-                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                   <button onClick={() => handleEditBookmark(bm)} className="p-2 text-slate-500 hover:text-white bg-slate-700/50 hover:bg-slate-600 rounded-lg transition-colors"><Edit2 size={14}/></button>
-                                   <button onClick={() => handleDeleteBookmark(bm.id)} className="p-2 text-slate-500 hover:text-red-400 bg-slate-700/50 hover:bg-slate-600 rounded-lg transition-colors"><Trash2 size={14}/></button>
-                               </div>
-                           </div>
+                        <div key={bm.id} className={`flex items-center gap-3 p-2 rounded-xl border transition-all group ${editingBmId === bm.id ? 'bg-yellow-500/10 border-yellow-500/50 ring-1 ring-yellow-500/30' : 'bg-slate-800/40 border-white/5 hover:bg-slate-800/60'} border-l-4 ${isWork ? 'border-l-indigo-500' : 'border-l-orange-500'}`}>
+                               
+                        {/* 1. 아이콘 & Context (왼쪽) */}
+                        <div className="flex flex-col items-center w-8 shrink-0">
+                            <span className="text-base">{isWork ? '🏢' : '🏠'}</span>
+                        </div>
+
+                        {/* 2. 카테고리 뱃지 */}
+                        <span className="text-[10px] font-bold text-slate-400 w-16 truncate bg-slate-700/30 px-1 py-0.5 rounded text-center shrink-0">{bm.category}</span>
+                        
+                        {/* 3. 메인 정보 (한 줄 배치) */}
+                        <div className="flex-1 min-w-0 flex items-center gap-3">
+                            {/* 사이트 명 (크기 2배 확대: text-xl) */}
+                            <a href={bm.url} target="_blank" rel="noreferrer" className="text-xl font-extrabold text-slate-200 hover:text-yellow-400 truncate hover:underline flex items-center gap-1 shrink-0 max-w-[40%]">
+                                {bm.title}
+                            </a>
+
+                            {/* 구분선 */}
+                            <div className="h-3 w-px bg-slate-700 shrink-0"></div>
+
+                            {/* 설명 (남은 공간 차지, 한 줄 말줄임) */}
+                            <span className="text-xs text-slate-500 truncate flex-1 pt-1">
+                                {bm.description || <span className="opacity-30">-</span>}
+                            </span>
+
+                            {/* ID / PW 표시 (오른쪽 정렬, Compact) */}
+                            {(bm.userId || bm.password) && (
+                                <div className="flex items-center gap-2 text-xs bg-black/30 px-2 py-1 rounded-lg shrink-0 border border-white/5">
+                                    {bm.userId && <span className="font-bold text-indigo-300 flex items-center gap-1"><User size={10}/> {bm.userId}</span>}
+                                    {bm.password && (
+                                        <div className="flex items-center gap-1 border-l border-white/10 pl-2 ml-1">
+                                            <span className="font-mono text-slate-400 text-[10px]">
+                                                {revealedPwIds[bm.id] ? bm.password : "••••••"}
+                                            </span>
+                                            <button onClick={() => handleRevealPw(bm.id)} className="hover:text-yellow-400 text-slate-500 transition-colors">
+                                                {revealedPwIds[bm.id] ? <EyeOff size={10}/> : <Eye size={10}/>}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 4. 수정/삭제 버튼 (오른쪽 끝, hover시 표시) */}
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                            <button onClick={() => handleEditBookmark(bm)} className="p-1.5 text-slate-500 hover:text-white bg-slate-700/50 hover:bg-slate-600 rounded-lg transition-colors"><Edit2 size={12}/></button>
+                            <button onClick={() => handleDeleteBookmark(bm.id)} className="p-1.5 text-slate-500 hover:text-red-400 bg-slate-700/50 hover:bg-slate-600 rounded-lg transition-colors"><Trash2 size={12}/></button>
+                        </div>
+                    </div>
                         );
                      })
                    }
