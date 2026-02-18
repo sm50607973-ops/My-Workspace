@@ -971,6 +971,20 @@ export default function App() {
   const [bmUserId, setBmUserId] = useState("");     // 입력중인 ID
   const [bmUserPw, setBmUserPw] = useState("");     // 입력중인 PW
   const [revealedPwIds, setRevealedPwIds] = useState({}); // 비밀번호가 공개된 항목들 { id: true }
+  const [studies, setStudies] = useState([]);
+  const [stDivisions, setStDivisions] = useState([]);      // 구분 목록 (동적)
+  const [stClassifications, setStClassifications] = useState([]); // 분류 목록 (동적)
+  
+  // 입력 폼 State
+  const [stDivision, setStDivision] = useState("");
+  const [stClassification, setStClassification] = useState("");
+  const [stTag, setStTag] = useState("");
+  const [stTitle, setStTitle] = useState("");
+  const [stUrl, setStUrl] = useState("");
+  const [stMemo, setStMemo] = useState("");
+  
+  const [editingStudyId, setEditingStudyId] = useState(null);
+  const [stSearchTerm, setStSearchTerm] = useState("");
   const [isMindMapOpen, setIsMindMapOpen] = useState(false);
   const [mindMapTargetProject, setMindMapTargetProject] = useState(null);
   const fetchData = (isBackground = false) => { if(!isBackground) setLoading(true);
@@ -985,6 +999,15 @@ export default function App() {
             if(json.bmCategories.length > 0 && !bmCategory) setBmCategory(json.bmCategories[0]);
         }
         if(json.bmSavedIds) setBmSavedIds(json.bmSavedIds);
+        if(json.studies) setStudies(json.studies);
+        if(json.stDivisions) {
+            setStDivisions(json.stDivisions);
+            if(json.stDivisions.length > 0 && !stDivision) setStDivision(json.stDivisions[0]);
+        }
+        if(json.stClassifications) {
+            setStClassifications(json.stClassifications);
+            if(json.stClassifications.length > 0 && !stClassification) setStClassification(json.stClassifications[0]);
+        }
         setLoading(false); 
     }).catch(err => { console.error(err); setLoading(false); });
   };
@@ -1538,6 +1561,99 @@ const handleRevealPw = (bmId) => {
       if(input !== null) showToast("비밀번호가 일치하지 않습니다.", "error");
   }
 };
+
+// 1. Study 저장/수정
+const handleSaveStudy = () => {
+  if(!stTitle.trim() || !stUrl.trim()) { showToast("제목과 URL은 필수입니다.", "error"); return; }
+  if(!stDivision || !stClassification) { showToast("구분과 분류를 모두 선택해주세요.", "error"); return; }
+  
+  setIsSaving(true);
+  const action = editingStudyId ? 'update_study' : 'create_study';
+  const payload = { 
+      action, 
+      division: stDivision, 
+      classification: stClassification, 
+      tag: stTag,
+      title: stTitle, 
+      url: stUrl, 
+      memo: stMemo 
+  };
+  if(editingStudyId) payload.studyId = editingStudyId;
+
+  fetch(API_URL, { method: "POST", body: JSON.stringify(payload) })
+  .then(res => res.json()).then(json => {
+      if(json.result === 'success') {
+         showToast(editingStudyId ? "수정되었습니다." : "추가되었습니다.", "success");
+         handleCancelStudyEdit();
+         fetchData(true);
+      } else { showToast("저장 실패", "error"); }
+      setIsSaving(false);
+  }).catch(() => { setIsSaving(false); showToast("통신 오류", "error"); });
+};
+
+const handleEditStudy = (item) => {
+  setEditingStudyId(item.id);
+  setStDivision(item.division);
+  setStClassification(item.classification);
+  setStTag(item.tag);
+  setStTitle(item.title);
+  setStUrl(item.url);
+  setStMemo(item.memo);
+};
+
+const handleCancelStudyEdit = () => {
+  setEditingStudyId(null);
+  setStTag(""); setStTitle(""); setStUrl(""); setStMemo("");
+  // 구분, 분류는 연속 입력을 위해 유지
+};
+
+const handleDeleteStudy = (id) => {
+  if(!confirm("삭제하시겠습니까?")) return;
+  setStudies(prev => prev.filter(s => s.id !== id));
+  if(editingStudyId === id) handleCancelStudyEdit();
+  fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'delete_study', studyId: id }) });
+};
+
+// 2. 설정 관리: 구분(Division)
+const handleAddStDivision = () => {
+  const newItem = prompt("추가할 '구분' 명을 입력하세요:");
+  if(newItem && newItem.trim()) {
+      const trimmed = newItem.trim();
+      if(stDivisions.includes(trimmed)) { showToast("이미 존재합니다.", "error"); return; }
+      setStDivisions(prev => [...prev, trimmed]);
+      setStDivision(trimmed);
+      fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'add_st_division', item: trimmed }) });
+  }
+};
+const handleDeleteStDivision = () => {
+  if(!stDivision) return;
+  if(!confirm(`'${stDivision}' 구분을 삭제하시겠습니까?`)) return;
+  const target = stDivision;
+  setStDivisions(prev => prev.filter(i => i !== target));
+  setStDivision("");
+  fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'delete_st_division', item: target }) });
+};
+
+// 3. 설정 관리: 분류(Classification)
+const handleAddStClass = () => {
+  const newItem = prompt("추가할 '분류' 명을 입력하세요:");
+  if(newItem && newItem.trim()) {
+      const trimmed = newItem.trim();
+      if(stClassifications.includes(trimmed)) { showToast("이미 존재합니다.", "error"); return; }
+      setStClassifications(prev => [...prev, trimmed]);
+      setStClassification(trimmed);
+      fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'add_st_class', item: trimmed }) });
+  }
+};
+const handleDeleteStClass = () => {
+  if(!stClassification) return;
+  if(!confirm(`'${stClassification}' 분류를 삭제하시겠습니까?`)) return;
+  const target = stClassification;
+  setStClassifications(prev => prev.filter(i => i !== target));
+  setStClassification("");
+  fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'delete_st_class', item: target }) });
+};
+
   // --- 🔍 Helper: Multi-keyword Search Logic ---
   const checkSearchMatch = (itemText, searchText) => {
       const searchLower = searchText.toLowerCase();
@@ -1603,6 +1719,11 @@ const handleRevealPw = (bmId) => {
   const filteredBookmarks = bookmarks.filter(item => 
     checkSearchMatch(item.title + " " + item.category + " " + item.description, bmSearchTerm)
 );
+
+const filteredStudies = studies.filter(item => 
+  checkSearchMatch(item.title + " " + item.division + " " + item.classification + " " + item.tag + " " + item.memo, stSearchTerm)
+);
+
   return (
     <div className={`min-h-[100dvh] lg:h-screen w-full p-4 lg:p-6 transition-colors duration-700 bg-gradient-to-br ${theme.bg} font-sans text-slate-200 flex flex-col lg:overflow-hidden`}>
       {toast.show && <Toast message={toast.message} type={toast.type} onClose={() => setToast({ ...toast, show: false })} />}
@@ -1616,6 +1737,7 @@ const handleRevealPw = (bmId) => {
                 {/* 🌟 New E-mail Analysis Button */}
                 <button onClick={() => setModalMode('EMAIL_ANALYSIS')} className="h-full py-3 px-6 bg-slate-800/60 hover:bg-slate-700 rounded-2xl shadow-sm transition-all text-slate-400 hover:text-pink-400 flex items-center gap-2 font-bold text-sm border border-white/5 whitespace-nowrap"><Mail size={18}/> e-mail 분석</button>
                 <button onClick={() => setModalMode('BOOKMARK_MANAGER')} className="h-full py-3 px-6 bg-slate-800/60 hover:bg-slate-700 rounded-2xl shadow-sm transition-all text-slate-400 hover:text-yellow-400 flex items-center gap-2 font-bold text-sm border border-white/5 whitespace-nowrap"><Star size={18}/> 북마크</button>
+                <button onClick={() => setModalMode('STUDY_MANAGER')} className="h-full py-3 px-6 bg-slate-800/60 hover:bg-slate-700 rounded-2xl shadow-sm transition-all text-slate-400 hover:text-green-400 flex items-center gap-2 font-bold text-sm border border-white/5 whitespace-nowrap"><BookOpen size={18}/> Study</button>
                 <button onClick={() => setModalMode('SETTINGS')} className="h-full py-3 px-4 bg-slate-800/60 hover:bg-slate-700 rounded-2xl shadow-sm transition-all text-slate-400 hover:text-white border border-white/5"><Settings size={18}/></button>
             </div>
             <GlobalStatusWidget />
@@ -2493,6 +2615,141 @@ const handleRevealPw = (bmId) => {
                     </div>
                         );
                      })
+                   }
+                </div>
+            </div>
+          </div>
+      </DetailModal>
+
+      {/* STUDY_MANAGER 모달 */}
+      <DetailModal isOpen={modalMode === 'STUDY_MANAGER'} onClose={() => { setModalMode(null); handleCancelStudyEdit(); }} title="Study 학습 관리" themeColor="green" size="large">
+          <div className="grid grid-cols-1 lg:grid-cols-12 h-full">
+            {/* Left: Input Form */}
+            <div className="lg:col-span-4 bg-slate-900/50 p-6 border-r border-white/5 space-y-4">
+                <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-slate-200 mb-2 flex items-center gap-2">
+                      {editingStudyId ? <Edit2 size={16} className="text-green-400"/> : <Plus size={16}/>} 
+                      {editingStudyId ? "학습 자료 수정" : "새 학습 자료"}
+                    </h4>
+                    {editingStudyId && <button onClick={handleCancelStudyEdit} className="text-xs text-red-400 hover:text-red-300 font-bold flex items-center gap-1"><ResetIcon size={12}/> 취소</button>}
+                </div>
+                
+                {/* 1. 구분(Division) - 동적 콤보 */}
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 mb-1">구분 (Division)</label>
+                   <div className="flex gap-2">
+                       <div className="relative flex-1">
+                           <select value={stDivision} onChange={(e) => setStDivision(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-green-500 text-sm text-slate-200 outline-none appearance-none">
+                              {stDivisions.length === 0 && <option value="">항목 없음</option>}
+                              {stDivisions.map(c => <option key={c} value={c}>{c}</option>)}
+                           </select>
+                           <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"/>
+                       </div>
+                       <button onClick={handleAddStDivision} className="p-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-white hover:border-slate-500" title="구분 추가"><Plus size={16}/></button>
+                       <button onClick={handleDeleteStDivision} className="p-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-red-400 hover:border-red-500" title="현재 구분 삭제"><Trash2 size={16}/></button>
+                   </div>
+                </div>
+
+                {/* 2. 분류(Classification) - 동적 콤보 */}
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 mb-1">분류 (Classification)</label>
+                   <div className="flex gap-2">
+                       <div className="relative flex-1">
+                           <select value={stClassification} onChange={(e) => setStClassification(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-green-500 text-sm text-slate-200 outline-none appearance-none">
+                              {stClassifications.length === 0 && <option value="">항목 없음</option>}
+                              {stClassifications.map(c => <option key={c} value={c}>{c}</option>)}
+                           </select>
+                           <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"/>
+                       </div>
+                       <button onClick={handleAddStClass} className="p-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-white hover:border-slate-500" title="분류 추가"><Plus size={16}/></button>
+                       <button onClick={handleDeleteStClass} className="p-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-red-400 hover:border-red-500" title="현재 분류 삭제"><Trash2 size={16}/></button>
+                   </div>
+                </div>
+
+                {/* 3. 태그 */}
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 mb-1">태그 (Tag)</label>
+                   <div className="relative">
+                       <input type="text" value={stTag} onChange={(e) => setStTag(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-green-500 text-sm text-slate-200 outline-none pl-10" placeholder="#리액트 #자바스크립트"/>
+                       <Tag size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"/>
+                   </div>
+                </div>
+                
+                {/* 4. 제목 & URL & 메모 */}
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 mb-1">제목 (Title)</label>
+                   <input type="text" value={stTitle} onChange={(e) => setStTitle(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-green-500 text-sm text-slate-200 outline-none" placeholder="예: React 19 공식 문서"/>
+                </div>
+
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 mb-1">URL</label>
+                   <input type="text" value={stUrl} onChange={(e) => setStUrl(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-green-500 text-sm text-slate-200 outline-none" placeholder="https://..."/>
+                </div>
+
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 mb-1">메모 (Memo)</label>
+                   <textarea value={stMemo} onChange={(e) => setStMemo(e.target.value)} className="w-full p-3 h-20 rounded-xl bg-slate-800 border border-slate-700 focus:border-green-500 text-sm text-slate-200 outline-none resize-none" placeholder="학습 포인트 메모..."/>
+                </div>
+
+                <button onClick={handleSaveStudy} disabled={isSaving} className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl transition-colors flex justify-center items-center gap-2">
+                   {isSaving ? <Loader2 size={16} className="animate-spin"/> : (editingStudyId ? <Edit2 size={16}/> : <Save size={16}/>)} 
+                   {editingStudyId ? "수정 저장" : "학습 자료 등록"}
+                </button>
+            </div>
+
+            {/* Right: List View (북마크와 동일한 Compact & One-line UI) */}
+            <div className="lg:col-span-8 p-6 bg-[#0f172a] flex flex-col h-full overflow-hidden">
+                <div className="shrink-0 mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-bold text-slate-200 flex items-center gap-2"><BookOpen size={16}/> 학습 자료 목록 <CountBadge count={filteredStudies.length} color="green"/></h4>
+                    </div>
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16}/>
+                        <input type="text" value={stSearchTerm} onChange={(e) => setStSearchTerm(e.target.value)} placeholder="제목, 태그, 메모 검색..." className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-800/60 border border-white/5 focus:outline-none focus:border-green-500/50 text-sm text-slate-200 placeholder-slate-500"/>
+                        {stSearchTerm && <button onClick={() => setStSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><X size={14}/></button>}
+                    </div>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pb-2">
+                   {filteredStudies.length === 0 ?
+                     <div className="text-center text-slate-500 py-10">{stSearchTerm ? "검색 결과가 없습니다." : "등록된 자료가 없습니다."}</div> : 
+                     filteredStudies.map((item) => (
+                        <div key={item.id} className={`flex items-center gap-3 p-2 rounded-xl border transition-all group ${editingStudyId === item.id ? 'bg-green-500/10 border-green-500/50 ring-1 ring-green-500/30' : 'bg-slate-800/40 border-white/5 hover:bg-slate-800/60'} border-l-4 border-l-green-500`}>
+                             
+                             {/* 1. 구분 (Division) */}
+                             <div className="flex flex-col items-center w-12 shrink-0">
+                                 <span className="text-[10px] font-bold text-green-400">{item.division}</span>
+                             </div>
+
+                             {/* 2. 분류 (Classification) Badge */}
+                             <span className="text-[10px] font-bold text-slate-300 w-16 truncate bg-slate-700/50 px-1 py-0.5 rounded text-center shrink-0 border border-white/5">{item.classification}</span>
+                             
+                             {/* 3. 메인 정보 (한 줄 배치) */}
+                             <div className="flex-1 min-w-0 flex items-center gap-3">
+                                 {/* 제목 (2배 확대: text-xl) */}
+                                 <a href={item.url} target="_blank" rel="noreferrer" className="text-xl font-extrabold text-slate-200 hover:text-green-400 truncate hover:underline flex items-center gap-1 shrink-0 max-w-[35%]">
+                                     {item.title}
+                                 </a>
+
+                                 {/* 구분선 */}
+                                 <div className="h-3 w-px bg-slate-700 shrink-0"></div>
+
+                                 {/* 태그 (있으면 표시) */}
+                                 {item.tag && <span className="text-xs text-indigo-400 font-bold shrink-0">{item.tag}</span>}
+
+                                 {/* 메모 (남은 공간 차지) */}
+                                 <span className="text-xs text-slate-500 truncate flex-1 pt-1">
+                                     {item.memo || <span className="opacity-30">-</span>}
+                                 </span>
+                             </div>
+
+                             {/* 4. 수정/삭제 버튼 */}
+                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                 <button onClick={() => handleEditStudy(item)} className="p-1.5 text-slate-500 hover:text-white bg-slate-700/50 hover:bg-slate-600 rounded-lg transition-colors"><Edit2 size={12}/></button>
+                                 <button onClick={() => handleDeleteStudy(item.id)} className="p-1.5 text-slate-500 hover:text-red-400 bg-slate-700/50 hover:bg-slate-600 rounded-lg transition-colors"><Trash2 size={12}/></button>
+                             </div>
+                        </div>
+                     ))
                    }
                 </div>
             </div>
