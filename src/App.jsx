@@ -7,7 +7,7 @@ import {
   MessageCircle, RotateCcw, Filter, ChevronDown, ChevronUp, ChevronRight, // 여기에 ChevronRight를 꼭 넣어주세요!
   List, Layers, PenTool, Search, Edit2, BarChart2, PieChart, CornerDownRight, Copy, ClipboardCheck, Mic, MicOff, Cloud, Sun, CloudRain, Wind, Settings, ExternalLink, Smartphone, Sparkles, Check, Activity, AlertCircle, GanttChartSquare, AlignJustify, GripVertical, FileText, TrendingUp, Globe, Flag, Link, FilePlus, StickyNote, Upload, BookOpen, Bookmark, RotateCcw as ResetIcon,
   Network, ZoomIn, ZoomOut, Move,
-  Star
+  Star,Eye, EyeOff, Key, Lock
 } from 'lucide-react';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbzwqxkMSbhAZ0C_ro_AbHE8g8_zaNwCbH2l1kdu4Vxt_CWQCAEX_wZXKiYUW5YWo2vKJg/exec";
@@ -967,6 +967,10 @@ export default function App() {
   const [bmDesc, setBmDesc] = useState("");
   const [editingBmId, setEditingBmId] = useState(null);
   const [bmSearchTerm, setBmSearchTerm] = useState("");
+  const [bmSavedIds, setBmSavedIds] = useState([]); // 저장된 ID 목록
+  const [bmUserId, setBmUserId] = useState("");     // 입력중인 ID
+  const [bmUserPw, setBmUserPw] = useState("");     // 입력중인 PW
+  const [revealedPwIds, setRevealedPwIds] = useState({}); // 비밀번호가 공개된 항목들 { id: true }
   const [isMindMapOpen, setIsMindMapOpen] = useState(false);
   const [mindMapTargetProject, setMindMapTargetProject] = useState(null);
   const fetchData = (isBackground = false) => { if(!isBackground) setLoading(true);
@@ -980,6 +984,7 @@ export default function App() {
             setBmCategories(json.bmCategories);
             if(json.bmCategories.length > 0 && !bmCategory) setBmCategory(json.bmCategories[0]);
         }
+        if(json.bmSavedIds) setBmSavedIds(json.bmSavedIds);
         setLoading(false); 
     }).catch(err => { console.error(err); setLoading(false); });
   };
@@ -1422,7 +1427,16 @@ export default function App() {
     
     setIsSaving(true);
     const action = editingBmId ? 'update_bookmark' : 'create_bookmark';
-    const payload = { action, context: bmContext, category: bmCategory, title: bmTitle, url: bmUrl, description: bmDesc };
+    const payload = { 
+      action, 
+      context: bmContext, 
+      category: bmCategory, 
+      title: bmTitle, 
+      url: bmUrl, 
+      description: bmDesc,
+      userId: bmUserId,    // 추가
+      password: bmUserPw   // 추가
+  };
     if(editingBmId) payload.bmId = editingBmId;
 
     fetch(API_URL, { method: "POST", body: JSON.stringify(payload) })
@@ -1443,6 +1457,8 @@ const handleEditBookmark = (item) => {
     setBmTitle(item.title);
     setBmUrl(item.url);
     setBmDesc(item.description);
+    setBmUserId(item.userId || "");
+    setBmUserPw(item.password || "");
 };
 
 const handleCancelBmEdit = () => {
@@ -1483,6 +1499,44 @@ const handleDeleteBmCategory = () => {
     else setBmCategory("");
     
     fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'delete_bm_category', category: target }) });
+};
+
+const handleAddBmId = () => {
+  const newId = prompt("목록에 추가할 ID를 입력하세요:");
+  if(newId && newId.trim()) {
+      const trimmed = newId.trim();
+      if(bmSavedIds.includes(trimmed)) { showToast("이미 존재하는 ID입니다.", "error"); return; }
+      setBmSavedIds(prev => [...prev, trimmed]);
+      setBmUserId(trimmed);
+      fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'add_bm_id', userId: trimmed }) });
+  }
+};
+
+const handleDeleteBmId = () => {
+  if(!bmUserId) return;
+  if(!confirm(`'${bmUserId}' ID를 목록에서 삭제하시겠습니까?`)) return;
+  const target = bmUserId;
+  const updated = bmSavedIds.filter(id => id !== target);
+  setBmSavedIds(updated);
+  setBmUserId(updated.length > 0 ? updated[0] : "");
+  fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'delete_bm_id', userId: target }) });
+};
+
+const handleRevealPw = (bmId) => {
+  // 이미 보이는 상태면 다시 숨김
+  if (revealedPwIds[bmId]) {
+      setRevealedPwIds(prev => ({ ...prev, [bmId]: false }));
+      return;
+  }
+
+  // 관리자 비밀번호 확인
+  const input = prompt("🔐 관리자 비밀번호를 입력하세요:");
+  if (input === "627627") {
+      setRevealedPwIds(prev => ({ ...prev, [bmId]: true }));
+      showToast("비밀번호가 표시됩니다.", "success");
+  } else {
+      if(input !== null) showToast("비밀번호가 일치하지 않습니다.", "error");
+  }
 };
   // --- 🔍 Helper: Multi-keyword Search Logic ---
   const checkSearchMatch = (itemText, searchText) => {
@@ -2322,6 +2376,30 @@ const handleDeleteBmCategory = () => {
                    </div>
                 </div>
                 
+                <div className="flex gap-4">
+                    <div className="flex-1">
+                        <label className="block text-xs font-bold text-slate-500 mb-1">ID (계정)</label>
+                        <div className="flex gap-2">
+                           <div className="relative flex-1">
+                               <select value={bmUserId} onChange={(e) => setBmUserId(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-500 text-sm text-slate-200 outline-none appearance-none">
+                                  {bmSavedIds.length === 0 && <option value="">ID 없음</option>}
+                                  {bmSavedIds.map(id => <option key={id} value={id}>{id}</option>)}
+                               </select>
+                               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"/>
+                           </div>
+                           <button onClick={handleAddBmId} className="p-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-white hover:border-slate-500" title="ID 목록에 추가"><Plus size={16}/></button>
+                           <button onClick={handleDeleteBmId} className="p-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-red-400 hover:border-red-500" title="현재 ID 삭제"><Trash2 size={16}/></button>
+                       </div>
+                    </div>
+                    <div className="flex-1">
+                        <label className="block text-xs font-bold text-slate-500 mb-1">Password</label>
+                        <div className="relative">
+                            <input type="password" value={bmUserPw} onChange={(e) => setBmUserPw(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-500 text-sm text-slate-200 outline-none font-mono" placeholder="비밀번호"/>
+                            <Lock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"/>
+                        </div>
+                    </div>
+                </div>
+
                 {/* 3. 제목 & URL & 설명 */}
                 <div>
                    <label className="block text-xs font-bold text-slate-500 mb-1">사이트 명</label>
@@ -2374,6 +2452,21 @@ const handleDeleteBmCategory = () => {
                                        <ExternalLink size={12}/> {bm.title}
                                    </a>
                                    {bm.description && <p className="text-xs text-slate-500 truncate mt-0.5">{bm.description}</p>}
+                                   {(bm.userId || bm.password) && (
+                                       <div className="flex items-center gap-3 mt-1.5 text-xs bg-black/20 p-1.5 rounded-lg w-fit">
+                                           {bm.userId && <span className="font-mono text-slate-300 flex items-center gap-1"><User size={10} className="text-slate-500"/> {bm.userId}</span>}
+                                           {bm.password && (
+                                               <div className="flex items-center gap-2 border-l border-white/10 pl-2">
+                                                   <span className="font-mono text-slate-400">
+                                                       {revealedPwIds[bm.id] ? bm.password : "••••••"}
+                                                   </span>
+                                                   <button onClick={() => handleRevealPw(bm.id)} className="hover:text-yellow-400 text-slate-500 transition-colors" title="관리자 비밀번호 입력 후 보기">
+                                                       {revealedPwIds[bm.id] ? <EyeOff size={12}/> : <Eye size={12}/>}
+                                                   </button>
+                                               </div>
+                                           )}
+                                       </div>
+                                   )}
                                </div>
                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                    <button onClick={() => handleEditBookmark(bm)} className="p-2 text-slate-500 hover:text-white bg-slate-700/50 hover:bg-slate-600 rounded-lg transition-colors"><Edit2 size={14}/></button>
