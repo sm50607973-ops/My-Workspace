@@ -6,7 +6,8 @@ import {
   Briefcase, User, MoreHorizontal, Mail, RefreshCw, Maximize2, Clock, Tag, Send, MapPin, 
   MessageCircle, RotateCcw, Filter, ChevronDown, ChevronUp, ChevronRight, // 여기에 ChevronRight를 꼭 넣어주세요!
   List, Layers, PenTool, Search, Edit2, BarChart2, PieChart, CornerDownRight, Copy, ClipboardCheck, Mic, MicOff, Cloud, Sun, CloudRain, Wind, Settings, ExternalLink, Smartphone, Sparkles, Check, Activity, AlertCircle, GanttChartSquare, AlignJustify, GripVertical, FileText, TrendingUp, Globe, Flag, Link, FilePlus, StickyNote, Upload, BookOpen, Bookmark, RotateCcw as ResetIcon,
-  Network, ZoomIn, ZoomOut, Move
+  Network, ZoomIn, ZoomOut, Move,
+  Star
 } from 'lucide-react';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbzwqxkMSbhAZ0C_ro_AbHE8g8_zaNwCbH2l1kdu4Vxt_CWQCAEX_wZXKiYUW5YWo2vKJg/exec";
@@ -957,6 +958,15 @@ export default function App() {
   const [editingEmailId, setEditingEmailId] = useState(null);
   // 🌟 [NEW] State for Email Analysis Search
   const [emailSearchTerm, setEmailSearchTerm] = useState("");
+  const [bookmarks, setBookmarks] = useState([]);
+  const [bmCategories, setBmCategories] = useState([]); // 카테고리 목록
+  const [bmContext, setBmContext] = useState("WORK");   // WORK or LIFE
+  const [bmCategory, setBmCategory] = useState("");     // 선택된 카테고리
+  const [bmTitle, setBmTitle] = useState("");
+  const [bmUrl, setBmUrl] = useState("");
+  const [bmDesc, setBmDesc] = useState("");
+  const [editingBmId, setEditingBmId] = useState(null);
+  const [bmSearchTerm, setBmSearchTerm] = useState("");
   const [isMindMapOpen, setIsMindMapOpen] = useState(false);
   const [mindMapTargetProject, setMindMapTargetProject] = useState(null);
   const fetchData = (isBackground = false) => { if(!isBackground) setLoading(true);
@@ -965,6 +975,11 @@ export default function App() {
         if(!currentReport) setCurrentReport(json.latestReport);
         if(json.refLinks) setRefLinks(json.refLinks); // Load Ref Links
         if(json.emailAnalysis) setEmailAnalysisList(json.emailAnalysis); // 🌟 Load Email Analysis
+        if(json.bookmarks) setBookmarks(json.bookmarks);
+        if(json.bmCategories) {
+            setBmCategories(json.bmCategories);
+            if(json.bmCategories.length > 0 && !bmCategory) setBmCategory(json.bmCategories[0]);
+        }
         setLoading(false); 
     }).catch(err => { console.error(err); setLoading(false); });
   };
@@ -1401,6 +1416,74 @@ export default function App() {
       if(editingEmailId === emailId) handleCancelEmailEdit();
       fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'delete_email', emailId }) });
   };
+  const handleSaveBookmark = () => {
+    if(!bmTitle.trim() || !bmUrl.trim()) { showToast("제목과 URL은 필수입니다.", "error"); return; }
+    if(!bmCategory) { showToast("카테고리를 선택하거나 추가해주세요.", "error"); return; }
+    
+    setIsSaving(true);
+    const action = editingBmId ? 'update_bookmark' : 'create_bookmark';
+    const payload = { action, context: bmContext, category: bmCategory, title: bmTitle, url: bmUrl, description: bmDesc };
+    if(editingBmId) payload.bmId = editingBmId;
+
+    fetch(API_URL, { method: "POST", body: JSON.stringify(payload) })
+    .then(res => res.json()).then(json => {
+        if(json.result === 'success') {
+           showToast(editingBmId ? "북마크가 수정되었습니다." : "북마크가 추가되었습니다.", "success");
+           handleCancelBmEdit();
+           fetchData(true);
+        } else { showToast("저장 실패", "error"); }
+        setIsSaving(false);
+    }).catch(() => { setIsSaving(false); showToast("통신 오류", "error"); });
+};
+
+const handleEditBookmark = (item) => {
+    setEditingBmId(item.id);
+    setBmContext(item.context);
+    setBmCategory(item.category);
+    setBmTitle(item.title);
+    setBmUrl(item.url);
+    setBmDesc(item.description);
+};
+
+const handleCancelBmEdit = () => {
+    setEditingBmId(null);
+    setBmTitle("");
+    setBmUrl("");
+    setBmDesc("");
+    // Context와 Category는 유지하여 연속 입력 편의성 제공
+};
+
+const handleDeleteBookmark = (bmId) => {
+    if(!confirm("정말 삭제하시겠습니까?")) return;
+    setBookmarks(prev => prev.filter(b => b.id !== bmId));
+    if(editingBmId === bmId) handleCancelBmEdit();
+    fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'delete_bookmark', bmId }) });
+};
+
+const handleAddBmCategory = () => {
+    const newCat = prompt("추가할 구분(카테고리) 명을 입력하세요:");
+    if(newCat && newCat.trim()) {
+        const trimmed = newCat.trim();
+        if(bmCategories.includes(trimmed)) { showToast("이미 존재하는 구분입니다.", "error"); return; }
+        
+        setBmCategories(prev => [...prev, trimmed]);
+        setBmCategory(trimmed); // 새로 만든 걸 자동 선택
+        fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'add_bm_category', category: trimmed }) });
+    }
+};
+
+const handleDeleteBmCategory = () => {
+    if(!bmCategory) return;
+    if(!confirm(`'${bmCategory}' 구분을 삭제하시겠습니까?\n(해당 구분의 북마크들은 그대로 유지됩니다.)`)) return;
+    
+    const target = bmCategory;
+    const updated = bmCategories.filter(c => c !== target);
+    setBmCategories(updated);
+    if(updated.length > 0) setBmCategory(updated[0]);
+    else setBmCategory("");
+    
+    fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'delete_bm_category', category: target }) });
+};
   // --- 🔍 Helper: Multi-keyword Search Logic ---
   const checkSearchMatch = (itemText, searchText) => {
       const searchLower = searchText.toLowerCase();
@@ -1463,6 +1546,9 @@ export default function App() {
   const filteredEmailList = emailAnalysisList.filter(item =>
       checkSearchMatch(item.title + " " + item.category + " " + (item.url||""), emailSearchTerm)
   );
+  const filteredBookmarks = bookmarks.filter(item => 
+    checkSearchMatch(item.title + " " + item.category + " " + item.description, bmSearchTerm)
+);
   return (
     <div className={`min-h-[100dvh] lg:h-screen w-full p-4 lg:p-6 transition-colors duration-700 bg-gradient-to-br ${theme.bg} font-sans text-slate-200 flex flex-col lg:overflow-hidden`}>
       {toast.show && <Toast message={toast.message} type={toast.type} onClose={() => setToast({ ...toast, show: false })} />}
@@ -1475,6 +1561,7 @@ export default function App() {
                 <button onClick={() => setModalMode('LINK_MANAGER')} className="h-full py-3 px-6 bg-slate-800/60 hover:bg-slate-700 rounded-2xl shadow-sm transition-all text-slate-400 hover:text-emerald-400 flex items-center gap-2 font-bold text-sm border border-white/5 whitespace-nowrap"><Bookmark size={18}/> 자료 관리</button>
                 {/* 🌟 New E-mail Analysis Button */}
                 <button onClick={() => setModalMode('EMAIL_ANALYSIS')} className="h-full py-3 px-6 bg-slate-800/60 hover:bg-slate-700 rounded-2xl shadow-sm transition-all text-slate-400 hover:text-pink-400 flex items-center gap-2 font-bold text-sm border border-white/5 whitespace-nowrap"><Mail size={18}/> e-mail 분석</button>
+                <button onClick={() => setModalMode('BOOKMARK_MANAGER')} className="h-full py-3 px-6 bg-slate-800/60 hover:bg-slate-700 rounded-2xl shadow-sm transition-all text-slate-400 hover:text-yellow-400 flex items-center gap-2 font-bold text-sm border border-white/5 whitespace-nowrap"><Star size={18}/> 북마크</button>
                 <button onClick={() => setModalMode('SETTINGS')} className="h-full py-3 px-4 bg-slate-800/60 hover:bg-slate-700 rounded-2xl shadow-sm transition-all text-slate-400 hover:text-white border border-white/5"><Settings size={18}/></button>
             </div>
             <GlobalStatusWidget />
@@ -2197,6 +2284,106 @@ export default function App() {
                     ))
                    }
                </div>
+            </div>
+          </div>
+      </DetailModal>
+
+      <DetailModal isOpen={modalMode === 'BOOKMARK_MANAGER'} onClose={() => { setModalMode(null); handleCancelBmEdit(); }} title="북마크 관리" themeColor="yellow" size="large">
+          <div className="grid grid-cols-1 lg:grid-cols-12 h-full">
+            {/* Left: Input Form */}
+            <div className="lg:col-span-4 bg-slate-900/50 p-6 border-r border-white/5 space-y-4">
+                <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-slate-200 mb-2 flex items-center gap-2">
+                      {editingBmId ? <Edit2 size={16} className="text-yellow-400"/> : <Plus size={16}/>} 
+                      {editingBmId ? "북마크 수정" : "새 북마크 추가"}
+                    </h4>
+                    {editingBmId && <button onClick={handleCancelBmEdit} className="text-xs text-red-400 hover:text-red-300 font-bold flex items-center gap-1"><ResetIcon size={12}/> 취소</button>}
+                </div>
+                
+                {/* 1. 업무/개인 선택 (KR/VN 대신) */}
+                <div className="flex gap-2 p-1 bg-slate-800 rounded-xl border border-slate-700 mb-4">
+                   <button onClick={() => setBmContext('WORK')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${bmContext === 'WORK' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>🏢 업무 (Work)</button>
+                   <button onClick={() => setBmContext('LIFE')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${bmContext === 'LIFE' ? 'bg-orange-600 text-white' : 'text-slate-400'}`}>🏠 개인 (Life)</button>
+                </div>
+                
+                {/* 2. 구분(Category) 콤보박스 + 추가/삭제 기능 */}
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 mb-1">구분 (Category)</label>
+                   <div className="flex gap-2">
+                       <div className="relative flex-1">
+                           <select value={bmCategory} onChange={(e) => setBmCategory(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-500 text-sm text-slate-200 outline-none appearance-none">
+                              {bmCategories.length === 0 && <option value="">구분 없음</option>}
+                              {bmCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                           </select>
+                           <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"/>
+                       </div>
+                       <button onClick={handleAddBmCategory} className="p-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-white hover:border-slate-500" title="구분 추가"><Plus size={16}/></button>
+                       <button onClick={handleDeleteBmCategory} className="p-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-red-400 hover:border-red-500" title="현재 구분 삭제"><Trash2 size={16}/></button>
+                   </div>
+                </div>
+                
+                {/* 3. 제목 & URL & 설명 */}
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 mb-1">사이트 명</label>
+                   <input type="text" value={bmTitle} onChange={(e) => setBmTitle(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-500 text-sm text-slate-200 outline-none" placeholder="예: 디자인 레퍼런스 사이트"/>
+                </div>
+
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 mb-1">링크 주소 (URL)</label>
+                   <input type="text" value={bmUrl} onChange={(e) => setBmUrl(e.target.value)} className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-500 text-sm text-slate-200 outline-none" placeholder="https://..."/>
+                </div>
+
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 mb-1">설명 (메모)</label>
+                   <textarea value={bmDesc} onChange={(e) => setBmDesc(e.target.value)} className="w-full p-3 h-20 rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-500 text-sm text-slate-200 outline-none resize-none" placeholder="간단한 설명..."/>
+                </div>
+
+                <button onClick={handleSaveBookmark} disabled={isSaving} className="w-full py-3 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-xl transition-colors flex justify-center items-center gap-2">
+                   {isSaving ? <Loader2 size={16} className="animate-spin"/> : (editingBmId ? <Edit2 size={16}/> : <Save size={16}/>)} 
+                   {editingBmId ? "수정 저장" : "북마크 등록"}
+                </button>
+            </div>
+
+            {/* Right: List View */}
+            <div className="lg:col-span-8 p-6 bg-[#0f172a] flex flex-col h-full overflow-hidden">
+                <div className="shrink-0 mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-bold text-slate-200 flex items-center gap-2"><Star size={16}/> 북마크 목록 <CountBadge count={filteredBookmarks.length} color="yellow"/></h4>
+                    </div>
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16}/>
+                        <input type="text" value={bmSearchTerm} onChange={(e) => setBmSearchTerm(e.target.value)} placeholder="사이트명, 구분, 설명 검색..." className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-800/60 border border-white/5 focus:outline-none focus:border-yellow-500/50 text-sm text-slate-200 placeholder-slate-500"/>
+                        {bmSearchTerm && <button onClick={() => setBmSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><X size={14}/></button>}
+                    </div>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pb-2">
+                   {filteredBookmarks.length === 0 ?
+                     <div className="text-center text-slate-500 py-10">{bmSearchTerm ? "검색 결과가 없습니다." : "등록된 북마크가 없습니다."}</div> : 
+                     filteredBookmarks.map((bm) => {
+                       const isWork = bm.context === 'WORK';
+                       return (
+                          <div key={bm.id} className={`flex items-center gap-4 p-4 rounded-xl border transition-all group ${editingBmId === bm.id ? 'bg-yellow-500/10 border-yellow-500/50 ring-1 ring-yellow-500/30' : 'bg-slate-800/40 border-white/5 hover:bg-slate-800/60'} border-l-4 ${isWork ? 'border-l-indigo-500' : 'border-l-orange-500'}`}>
+                               <div className="flex flex-col items-center w-10 shrink-0">
+                                   <span className="text-lg">{isWork ? '🏢' : '🏠'}</span>
+                                   <span className={`text-[9px] font-bold ${isWork ? 'text-indigo-400' : 'text-orange-400'}`}>{isWork ? 'WORK' : 'LIFE'}</span>
+                               </div>
+                               <span className="text-xs font-bold text-slate-400 w-20 truncate bg-slate-700/30 px-2 py-1 rounded text-center">{bm.category}</span>
+                               <div className="flex-1 min-w-0">
+                                   <a href={bm.url} target="_blank" rel="noreferrer" className={`text-sm font-bold hover:underline truncate block flex items-center gap-1 text-slate-200 hover:text-yellow-400`}>
+                                       <ExternalLink size={12}/> {bm.title}
+                                   </a>
+                                   {bm.description && <p className="text-xs text-slate-500 truncate mt-0.5">{bm.description}</p>}
+                               </div>
+                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                   <button onClick={() => handleEditBookmark(bm)} className="p-2 text-slate-500 hover:text-white bg-slate-700/50 hover:bg-slate-600 rounded-lg transition-colors"><Edit2 size={14}/></button>
+                                   <button onClick={() => handleDeleteBookmark(bm.id)} className="p-2 text-slate-500 hover:text-red-400 bg-slate-700/50 hover:bg-slate-600 rounded-lg transition-colors"><Trash2 size={14}/></button>
+                               </div>
+                           </div>
+                        );
+                     })
+                   }
+                </div>
             </div>
           </div>
       </DetailModal>
