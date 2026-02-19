@@ -470,19 +470,17 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
   };
   const handleMouseUp = () => setIsDragging(false);
 
-  // 🌟트리 구조 레이아웃 계산 알고리즘 (토글 기능 적용)
+  // 🌟트리 구조 레이아웃 계산 알고리즘 (Result 노드 추가됨)
   const calculateLayout = () => {
     const nodes = [];
     const edges = [];
     
     const NODE_WIDTH = 320; 
     
-    // Task(부모)와 Subtask(자식)의 높이/간격 설정을 분리
-    const TASK_HEIGHT = 80;   // 할 일 카드 높이
-    const TASK_GAP = 30;      // 할 일 카드 간격
+    const TASK_HEIGHT = 80;
+    const TASK_GAP = 30;
     
-    // 체크리스트 간격 70% 축소 (높이 34px + 간격 6px = 40px)
-    const SUBTASK_HEIGHT = 34; 
+    const SUBTASK_HEIGHT = 34;
     const SUBTASK_GAP = 6;     
 
     const LEVEL_GAP = 120;
@@ -497,27 +495,20 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
 
     // 2. 높이 계산 및 배치
     let currentY = 0;
-    
     taskNodes.forEach((task, tIdx) => {
       const subTaskCount = task.subTasks.length;
       const isCollapsed = collapsedTasks[task.id]; 
 
       // 체크리스트 영역의 총 높이 계산
-      // 체크리스트 개수 * (높이 + 간격)
       const subTasksTotalHeight = subTaskCount * (SUBTASK_HEIGHT + SUBTASK_GAP);
 
-      // 해당 Task가 차지할 전체 높이 결정
-      // 접힘(Collapsed): Task 높이만 차지
-      // 펼침(!Collapsed): Task 높이와 체크리스트 총 높이 중 더 큰 값 사용 (최소 TASK_HEIGHT + TASK_GAP 보장)
       let taskAreaHeight = TASK_HEIGHT + TASK_GAP;
       
       if (!isCollapsed && subTaskCount > 0) {
-          // 체크리스트가 펼쳐져 있을 때는, 체크리스트들이 차지하는 공간만큼 높이를 늘려줌
-          // 단, 체크리스트가 적어서 Task 높이보다 작을 수 있으므로 max값 사용
           taskAreaHeight = Math.max(taskAreaHeight, subTasksTotalHeight); 
       }
       
-      // Task 노드 Y좌표: 할당된 영역의 중앙
+      // Task 노드 Y좌표
       const taskY = currentY + (taskAreaHeight / 2) - (TASK_HEIGHT / 2);
 
       const taskNodeObj = { 
@@ -528,13 +519,12 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
       nodes.push(taskNodeObj);
       edges.push({ from: projectNode, to: taskNodeObj });
 
-      // SubTask 배치
+      // SubTask 및 Result Node 배치
       if (!isCollapsed && subTaskCount > 0) {
-          // 체크리스트 시작 Y좌표: Task 영역의 시작점부터 차곡차곡 쌓음
-          // 시각적 균형을 위해 약간의 오프셋 조정 (중앙 정렬 느낌)
           let subY = currentY + (taskAreaHeight - subTasksTotalHeight) / 2;
-
+          
           task.subTasks.forEach((sub, sIdx) => {
+            // 1. Subtask Node 생성
             const subNodeObj = {
               id: `${task.id}-sub-${sIdx}`, type: 'subtask', 
               data: sub, parentId: task.id, index: sIdx,
@@ -544,7 +534,21 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
             nodes.push(subNodeObj);
             edges.push({ from: taskNodeObj, to: subNodeObj });
             
-            // 👉 [수정] 줄어든 간격만큼 이동
+            // Result Node 생성 (결과 내용이 있을 경우에만)
+            if (sub.result && sub.result.trim() !== "") {
+                const resultNodeObj = {
+                    id: `${task.id}-sub-${sIdx}-result`, 
+                    type: 'result', // 새로운 타입
+                    data: { content: sub.result },
+                    parentId: `${task.id}-sub-${sIdx}`,
+                    x: (NODE_WIDTH + LEVEL_GAP) * 3, // 4번째 레벨 (Project -> Task -> Sub -> Result)
+                    y: subY // Subtask 바로 옆에 배치
+                };
+                nodes.push(resultNodeObj);
+                // Subtask -> Result 연결선
+                edges.push({ from: subNodeObj, to: resultNodeObj });
+            }
+            
             subY += (SUBTASK_HEIGHT + SUBTASK_GAP);
           });
       }
@@ -726,13 +730,18 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
             const hasSubTasks = subTaskCount > 0;
 
             // 2. 카드 스타일 정의
-            let cardStyle = "";      
+            let cardStyle = "";
             let contentStyle = "";   
 
             if (node.type === 'project') {
                 cardStyle = "bg-gradient-to-br from-indigo-600 to-blue-700 border-2 border-indigo-300/50 z-20 hover:scale-105 shadow-xl shadow-indigo-900/50";
                 contentStyle = "text-white";
+            } else if (node.type === 'result') { 
+                // 결과(Result) 노드 스타일 (노란색 메모장 느낌)
+                cardStyle = "bg-yellow-500/10 border-2 border-yellow-500/50 shadow-md z-10";
+                contentStyle = "text-yellow-200 text-[11px] leading-tight whitespace-pre-wrap"; // 줄바꿈 허용
             } else {
+                // 기존 Task / Subtask 스타일 로직
                 if (isDone) {
                     cardStyle = "bg-slate-800 z-10 border-2 border-emerald-500/80 shadow-lg shadow-emerald-900/20";
                     contentStyle = "text-slate-400 line-through decoration-slate-600";
@@ -746,10 +755,13 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
             }
 
             // 너비와 높이 클래스 분기 처리
-            // Subtask: 너비 자동(w-auto), 높이 슬림(min-h-[34px]), 패딩 얇게(py-1)
-            // Task/Project: 너비 고정(w-[320px]), 높이 일반(min-h-[50px]), 패딩 보통(py-3)
-            const widthClass = node.type === 'subtask' ? 'w-auto min-w-[320px] pr-8' : 'w-[320px]';
-            const heightClass = node.type === 'subtask' ? 'min-h-[34px] py-1' : 'min-h-[50px] py-3';
+            const widthClass = node.type === 'subtask' ? 'w-auto min-w-[320px] pr-8' : 
+                               node.type === 'result' ? 'w-[250px] pr-4' : //  Result 노드 너비 설정
+                               'w-[320px]';
+                               
+            const heightClass = node.type === 'subtask' ? 'min-h-[34px] py-1' : 
+                                node.type === 'result' ? 'min-h-[34px] py-2' : //  Result 노드 높이 설정
+                                'min-h-[50px] py-3';
 
             return (
               <div
@@ -772,6 +784,7 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
                   <div className="flex items-center gap-2.5">
                     <div className="shrink-0 flex items-center">
                         {node.type === 'project' && <Briefcase size={16} className="text-white/90"/>}
+                        {node.type === 'result' && <CornerDownRight size={14} className="text-yellow-500"/>}
                         {(node.type === 'task' || node.type === 'subtask') && (
                             <div className={`p-0.5 rounded transition-colors`}>
                                 {(node.data.status === 'Done' || node.data.done) ? 
@@ -787,7 +800,10 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
                         className={`text-xs font-bold block whitespace-nowrap ${node.type === 'subtask' ? '' : 'truncate'} flex-1 ${contentStyle}`}
                         title={node.data.title || node.data.content}
                     >
-                       {node.type === 'project' ? node.data.title : node.data.title || node.data.content}
+                       {/* Result 노드일 때는 data.content 표시 */}
+                       {node.type === 'project' ? node.data.title : 
+                        node.type === 'result' ? node.data.content :
+                        node.data.title || node.data.content}
                     </span>
 
                     {/* 토글 버튼 (Task이고 서브태스크가 있을 때만) */}
@@ -1464,6 +1480,25 @@ export default function App() {
     setEditingSubtaskIndex(null); // 수정 모드 종료
 
     // 서버 및 전역 상태 동기화
+    updateGlobalTaskState(selectedItem.id, 'subTasks', JSON.stringify(updated));
+    fetch(API_URL, { 
+        method: "POST", 
+        body: JSON.stringify({ 
+            action: 'update_task', 
+            taskId: selectedItem.id, 
+            subTasks: JSON.stringify(updated) 
+        }) 
+    });
+  };
+
+  const updateSubtaskResult = (idx, text) => {
+    const updated = [...taskSubTasks];
+    // 기존 데이터 구조 유지하면서 result 필드만 업데이트
+    updated[idx] = { ...updated[idx], result: text };
+    
+    setTaskSubTasks(updated);
+
+    // 서버 저장 (디바운싱 없이 즉시 저장하도록 구현)
     updateGlobalTaskState(selectedItem.id, 'subTasks', JSON.stringify(updated));
     fetch(API_URL, { 
         method: "POST", 
@@ -2313,6 +2348,7 @@ const filteredStudies = studies.filter(item =>
                     <div className="space-y-2 mb-4 overflow-y-auto custom-scrollbar pr-1 flex-1 min-h-[200px]">
                        {taskSubTasks.length === 0 ? 
                        <div className="h-20 flex items-center justify-center text-slate-600 text-xs border border-dashed border-slate-800 rounded-xl">체크리스트가 없습니다. 아래에서 추가하세요.</div> :
+                       // 결과(Result) 입력 기능이 포함된 렌더링 코드
                        taskSubTasks.map((sub, idx) => (
                         <div 
                             key={idx} 
@@ -2321,63 +2357,87 @@ const filteredStudies = studies.filter(item =>
                             onDragEnter={(e) => handleSubTaskDragEnter(e, idx)}
                             onDragEnd={handleSubTaskDragEnd}
                             onDragOver={(e) => e.preventDefault()}
-                            className={`flex items-center gap-3 p-3 bg-slate-800/30 rounded-xl border border-white/5 group transition-colors ${editingSubtaskIndex === idx ? 'ring-1 ring-indigo-500 bg-indigo-500/10' : 'hover:bg-slate-800/50 cursor-move'}`}
+                            className={`flex flex-col p-3 bg-slate-800/30 rounded-xl border border-white/5 group transition-colors ${editingSubtaskIndex === idx ? 'ring-1 ring-indigo-500 bg-indigo-500/10' : 'hover:bg-slate-800/50'}`}
                         >
-                            {/* 드래그 핸들 (수정 모드 아닐 때만 표시) */}
-                            {editingSubtaskIndex !== idx && (
-                                <div className="text-slate-600 cursor-move hover:text-slate-400 shrink-0">
-                                    <GripVertical size={16}/>
-                                </div>
-                            )}
-
-                            {/* 완료 체크 박스 (수정 모드 아닐 때만 표시) */}
-                            {editingSubtaskIndex !== idx && (
-                                <button onClick={() => handleToggleTaskSubTask(idx)} className={`p-1 rounded-lg transition-colors shrink-0 ${sub.done ? 'text-emerald-400' : 'text-slate-600 hover:text-slate-400'}`}>
-                                    {sub.done ? <CheckSquare size={20}/> : <Square size={20}/>}
-                                </button>
-                            )}
-                            
-                            {/* 🌟 핵심 로직: 수정 중이면 Input 표시, 아니면 텍스트 표시 */}
-                            {editingSubtaskIndex === idx ? (
-                                // [수정 모드 UI] 입력창 + 저장/취소 버튼
-                                <div className="flex-1 flex items-center gap-2 animate-fadeIn">
-                                    <input 
-                                        type="text" 
-                                        value={editingSubtaskText} 
-                                        onChange={(e) => setEditingSubtaskText(e.target.value)}
-                                        className="flex-1 bg-slate-900 border border-indigo-500 rounded-lg px-2 py-1 text-sm text-white outline-none"
-                                        autoFocus
-                                        onKeyPress={(e) => e.key === 'Enter' && saveEditingSubtask(idx)}
-                                    />
-                                    <button onClick={() => saveEditingSubtask(idx)} className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors" title="저장"><Check size={14}/></button>
-                                    <button onClick={cancelEditingSubtask} className="p-1.5 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors" title="취소"><X size={14}/></button>
-                                </div>
-                            ) : (
-                                // [일반 보기 UI] 텍스트 + 수정/삭제 버튼
-                                <>
-                                    <span 
-                                        onDoubleClick={() => startEditingSubtask(idx, sub.title)} // 더블클릭 시 수정 모드 진입
-                                        className={`flex-1 text-sm transition-all select-none ${sub.done ? 'text-slate-500 line-through' : 'text-slate-200'}`}
-                                    >
-                                        {sub.title}
-                                    </span>
-                                    
-                                    {/* 우측 액션 버튼들 (Hover 시 등장) */}
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        {/* 👉 수정 버튼 추가됨 */}
-                                        <button onClick={() => startEditingSubtask(idx, sub.title)} className="p-1.5 text-slate-500 hover:text-indigo-400 bg-slate-700/30 hover:bg-slate-700 rounded-lg transition-colors" title="수정">
-                                            <Edit2 size={14}/>
-                                        </button>
-                                        <button onClick={() => handleDeleteTaskSubTask(idx)} className="p-1.5 text-slate-500 hover:text-red-400 bg-slate-700/30 hover:bg-slate-700 rounded-lg transition-colors" title="삭제">
-                                            <Trash2 size={14}/>
-                                        </button>
+                            {/* 상단: 드래그핸들 + 체크박스 + 제목 + 액션버튼 */}
+                            <div className="flex items-center gap-3">
+                                {/* 드래그 핸들 */}
+                                {editingSubtaskIndex !== idx && (
+                                    <div className="text-slate-600 cursor-move hover:text-slate-400 shrink-0">
+                                        <GripVertical size={16}/>
                                     </div>
-                                </>
+                                )}
+
+                                {/* 체크박스 */}
+                                {editingSubtaskIndex !== idx && (
+                                    <button onClick={() => handleToggleTaskSubTask(idx)} className={`p-1 rounded-lg transition-colors shrink-0 ${sub.done ? 'text-emerald-400' : 'text-slate-600 hover:text-slate-400'}`}>
+                                        {sub.done ? <CheckSquare size={20}/> : <Square size={20}/>}
+                                    </button>
+                                )}
+                                
+                                {/* 제목 (수정 모드 vs 일반 모드) */}
+                                {editingSubtaskIndex === idx ? (
+                                    <div className="flex-1 flex items-center gap-2 animate-fadeIn">
+                                        <input 
+                                            type="text" 
+                                            value={editingSubtaskText} 
+                                            onChange={(e) => setEditingSubtaskText(e.target.value)}
+                                            className="flex-1 bg-slate-900 border border-indigo-500 rounded-lg px-2 py-1 text-sm text-white outline-none"
+                                            autoFocus
+                                            onKeyPress={(e) => e.key === 'Enter' && saveEditingSubtask(idx)}
+                                        />
+                                        <button onClick={() => saveEditingSubtask(idx)} className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors" title="저장"><Check size={14}/></button>
+                                        <button onClick={cancelEditingSubtask} className="p-1.5 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors" title="취소"><X size={14}/></button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <span 
+                                            onDoubleClick={() => startEditingSubtask(idx, sub.title)}
+                                            className={`flex-1 text-sm transition-all select-none ${sub.done ? 'text-slate-500 line-through' : 'text-slate-200'}`}
+                                        >
+                                            {sub.title}
+                                        </span>
+                                        
+                                        {/* 우측 액션 버튼들 */}
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {/* 결과 기록 토글 버튼 */}
+                                            <button 
+                                                onClick={() => updateSubtaskResult(idx, sub.result ? "" : " ")} // 빈 공백을 넣어 입력창 열기 유도
+                                                className={`p-1.5 rounded-lg transition-colors ${sub.result ? 'text-blue-400 bg-blue-500/10' : 'text-slate-500 hover:text-blue-400 bg-slate-700/30 hover:bg-slate-700'}`} 
+                                                title="결과/메모 기록"
+                                            >
+                                                <MessageCircle size={14}/>
+                                            </button>
+
+                                            <button onClick={() => startEditingSubtask(idx, sub.title)} className="p-1.5 text-slate-500 hover:text-indigo-400 bg-slate-700/30 hover:bg-slate-700 rounded-lg transition-colors" title="수정">
+                                                <Edit2 size={14}/>
+                                            </button>
+                                            <button onClick={() => handleDeleteTaskSubTask(idx)} className="p-1.5 text-slate-500 hover:text-red-400 bg-slate-700/30 hover:bg-slate-700 rounded-lg transition-colors" title="삭제">
+                                                <Trash2 size={14}/>
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
+                            {/* 하단 결과(Result) 입력 영역 (내용이 있거나 활성화된 경우 표시) */}
+                            {(sub.result !== undefined && sub.result !== null && sub.result !== "") && (
+                                <div className="mt-2 ml-8 pl-3 border-l-2 border-slate-700 animate-fadeIn">
+                                    <div className="flex items-start gap-2">
+                                        <CornerDownRight size={14} className="text-slate-500 mt-1 shrink-0"/>
+                                        <textarea
+                                            value={sub.result.trim() === "" ? "" : sub.result}
+                                            onChange={(e) => updateSubtaskResult(idx, e.target.value)}
+                                            placeholder="처리 결과나 메모를 입력하세요..."
+                                            className="w-full bg-slate-900/50 text-xs text-blue-200 p-2 rounded-lg border border-slate-700 focus:border-blue-500 focus:bg-slate-900 outline-none resize-none leading-relaxed h-auto min-h-[40px]"
+                                        />
+                                    </div>
+                                </div>
                             )}
                         </div>
                     ))
                  }
-                     </div>
+                </div>
 
                     <div className="flex gap-2 mt-auto pt-4 border-t border-white/5 sticky bottom-0 bg-[#0f172a]">
                         <input type="text" value={newTaskSubTaskTitle} onChange={(e) => setNewTaskSubTaskTitle(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAddTaskSubTask()} placeholder="새 항목 추가..." className="flex-1 p-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-indigo-500 text-sm text-slate-200 outline-none"/>
