@@ -643,14 +643,14 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
               
               // 출발점 높이 조정: Subtask에서 나가는 선은 없지만, 만약 있다면 높이 조정 필요
               // 여기서는 Task -> Subtask로 가는 선이므로 startY는 Task 높이 기준(+25) 유지
-              const startY = edge.from.y + 25;  
+              const startY = edge.from.y + (edge.from.type === 'subtask' ? 17 : 25);  
               
               const endX = edge.to.x;
               
               // 도착점(Target)이 Subtask면 높이 절반(약 17px) 지점으로 조정
               // Task는 +25px 유지 (높이가 크니까)
-              const isSubTarget = edge.to.type === 'subtask';
-              const endY = edge.to.y + (isSubTarget ? 17 : 25);
+              const isSmallTarget = edge.to.type === 'subtask' || edge.to.type === 'result';
+              const endY = edge.to.y + (isSmallTarget ? 17 : 25);
               
               // 곡선을 더 완만하게 만들기 위해 텐션도 약간 증가
               const tension = 100;
@@ -736,10 +736,10 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
             if (node.type === 'project') {
                 cardStyle = "bg-gradient-to-br from-indigo-600 to-blue-700 border-2 border-indigo-300/50 z-20 hover:scale-105 shadow-xl shadow-indigo-900/50";
                 contentStyle = "text-white";
-            } else if (node.type === 'result') { 
+              } else if (node.type === 'result') { 
                 // 결과(Result) 노드 스타일 (노란색 메모장 느낌)
                 cardStyle = "bg-yellow-500/10 border-2 border-yellow-500/50 shadow-md z-10";
-                contentStyle = "text-yellow-200 text-[11px] leading-tight whitespace-pre-wrap"; // 줄바꿈 허용
+                contentStyle = "text-yellow-200 text-[11px] leading-tight whitespace-nowrap"; // 줄바꿈 방지 및 한 줄 표시 (수정됨)
             } else {
                 // 기존 Task / Subtask 스타일 로직
                 if (isDone) {
@@ -756,7 +756,7 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
 
             // 너비와 높이 클래스 분기 처리
             const widthClass = node.type === 'subtask' ? 'w-auto min-w-[320px] pr-8' : 
-                               node.type === 'result' ? 'w-[250px] pr-4' : //  Result 노드 너비 설정
+                               node.type === 'result' ? 'w-max px-4' : // 텍스트 길이에 맞춰 자동 조절 (수정됨)
                                'w-[320px]';
                                
             const heightClass = node.type === 'subtask' ? 'min-h-[34px] py-1' : 
@@ -797,7 +797,7 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
                     
                     {/* 제목 텍스트 */}
                     <span 
-                        className={`text-xs font-bold block whitespace-nowrap ${node.type === 'subtask' ? '' : 'truncate'} flex-1 ${contentStyle}`}
+                        className={`text-xs font-bold block whitespace-nowrap ${(node.type === 'subtask' || node.type === 'result') ? '' : 'truncate'} flex-1 ${contentStyle}`}
                         title={node.data.title || node.data.content}
                     >
                        {/* Result 노드일 때는 data.content 표시 */}
@@ -818,7 +818,7 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
                   </div>
 
                   {/* 하단: 진행률 바 및 통계 (Subtask 제외) */}
-                  {node.type !== 'subtask' && (
+                  {node.type !== 'subtask' && node.type !== 'result' && (
                     <div className="space-y-1 mt-1">
                         {/* 진행 바 */}
                         <div className="flex items-center gap-2">
@@ -957,6 +957,9 @@ export default function App() {
   const [editingSubtaskIndex, setEditingSubtaskIndex] = useState(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState("");
 
+  // 체크리스트 결과/메모 입력창 토글 상태 관리
+  const [openResultIndexes, setOpenResultIndexes] = useState({});
+
   const [newResourceLink, setNewResourceLink] = useState("");
   const [newResourceName, setNewResourceName] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -1069,6 +1072,7 @@ export default function App() {
         
          setIsResourceOpen(true);
          setIsNoteOpen(true);
+         setOpenResultIndexes({});
       }
     }
   }, [selectedItem, data, modalMode]);
@@ -2391,19 +2395,32 @@ const filteredStudies = studies.filter(item =>
                                     </div>
                                 ) : (
                                     <>
-                                        <span 
-                                            onDoubleClick={() => startEditingSubtask(idx, sub.title)}
-                                            className={`flex-1 text-sm transition-all select-none ${sub.done ? 'text-slate-500 line-through' : 'text-slate-200'}`}
-                                        >
-                                            {sub.title}
-                                        </span>
+                                        {/* 제목 및 메모 인디케이터 래퍼 */}
+                                        <div className="flex-1 flex flex-col justify-center min-w-0">
+                                            <span 
+                                                onDoubleClick={() => startEditingSubtask(idx, sub.title)}
+                                                className={`text-sm transition-all select-none ${sub.done ? 'text-slate-500 line-through' : 'text-slate-200'}`}
+                                            >
+                                                {sub.title}
+                                            </span>
+                                            {/* 입력창이 닫혀있고, 메모 내용이 있을 때 표시되는 인디케이터 */}
+                                            {(!openResultIndexes[idx] && sub.result && sub.result.trim() !== "") && (
+                                                <div className="flex items-center gap-1 mt-0.5 opacity-70">
+                                                    <MessageCircle size={10} className="text-blue-400"/>
+                                                    <span className="text-[10px] text-blue-400 font-medium truncate">
+                                                        {sub.result}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
                                         
                                         {/* 우측 액션 버튼들 */}
                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                           
                                             {/* 결과 기록 토글 버튼 */}
                                             <button 
-                                                onClick={() => updateSubtaskResult(idx, sub.result ? "" : " ")} // 빈 공백을 넣어 입력창 열기 유도
-                                                className={`p-1.5 rounded-lg transition-colors ${sub.result ? 'text-blue-400 bg-blue-500/10' : 'text-slate-500 hover:text-blue-400 bg-slate-700/30 hover:bg-slate-700'}`} 
+                                                onClick={() => setOpenResultIndexes(prev => ({ ...prev, [idx]: !prev[idx] }))} // 👇 데이터 삭제 대신 UI 상태만 토글
+                                                className={`p-1.5 rounded-lg transition-colors ${(sub.result && sub.result.trim() !== "") ? 'text-blue-400 bg-blue-500/10' : 'text-slate-500 hover:text-blue-400 bg-slate-700/30 hover:bg-slate-700'}`} 
                                                 title="결과/메모 기록"
                                             >
                                                 <MessageCircle size={14}/>
@@ -2420,13 +2437,13 @@ const filteredStudies = studies.filter(item =>
                                 )}
                             </div>
 
-                            {/* 하단 결과(Result) 입력 영역 (내용이 있거나 활성화된 경우 표시) */}
-                            {(sub.result !== undefined && sub.result !== null && sub.result !== "") && (
+                            {/* 하단 결과(Result) 입력 영역 (openResultIndexes 상태에 따라 렌더링) */}
+                            {openResultIndexes[idx] && (
                                 <div className="mt-2 ml-8 pl-3 border-l-2 border-slate-700 animate-fadeIn">
                                     <div className="flex items-start gap-2">
                                         <CornerDownRight size={14} className="text-slate-500 mt-1 shrink-0"/>
                                         <textarea
-                                            value={sub.result.trim() === "" ? "" : sub.result}
+                                            value={sub.result || ""}
                                             onChange={(e) => updateSubtaskResult(idx, e.target.value)}
                                             placeholder="처리 결과나 메모를 입력하세요..."
                                             className="w-full bg-slate-900/50 text-xs text-blue-200 p-2 rounded-lg border border-slate-700 focus:border-blue-500 focus:bg-slate-900 outline-none resize-none leading-relaxed h-auto min-h-[40px]"
