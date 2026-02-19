@@ -439,6 +439,20 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
   // 접힌 할 일 목록 상태 관리
   const [collapsedTasks, setCollapsedTasks] = useState({});
 
+  // 마인드 맵 모달이 열릴 때 완료된(Done) 태스크의 체크리스트를 기본적으로 접어줍니다.
+  useEffect(() => {
+    if (isOpen && tasks && project) {
+      const initialCollapsedState = {};
+      tasks.forEach(t => {
+        // 현재 열려있는 프로젝트의 태스크 중 완료된 태스크만 판별합니다.
+        if (t.projectId === project.id && t.status === 'Done') {
+          initialCollapsedState[t.id] = true;
+        }
+      });
+      setCollapsedTasks(initialCollapsedState);
+    }
+  }, [isOpen, tasks, project]);
+
   // 토글 함수 (이 함수가 꼭 있어야 합니다)
   const toggleTaskCollapse = (taskId) => {
     setCollapsedTasks(prev => ({
@@ -450,7 +464,7 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
   // 줌 컨트롤
   const handleZoom = (delta) => setScale(prev => Math.min(2, Math.max(0.3, prev + delta)));
 
-  // 👉 [추가됨] 마우스 휠 줌 핸들러 (요청사항 6)
+  // 마우스 휠 줌 핸들러 (요청사항 6)
   const handleWheel = (e) => {
     e.stopPropagation();
     // 휠을 올리면 확대, 내리면 축소 (deltaY가 음수일 때 위로 스크롤)
@@ -607,7 +621,7 @@ const MindMapModal = ({ isOpen, onClose, project, tasks, onUpdateTask, onCreateT
   `;
 
   return (
-    <div className="fixed inset-0 z-[120] bg-slate-900/90 backdrop-blur-md flex flex-col animate-fadeIn">
+    <div className="fixed inset-0 z-[160] bg-slate-900/90 backdrop-blur-md flex flex-col animate-fadeIn">
       {/* 스타일 태그 삽입 */}
       <style>{animationStyle}</style>
       {/* 툴바 */}
