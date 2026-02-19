@@ -39,8 +39,8 @@ const ResourceInputModal = ({ isOpen, onClose, onAdd, onUpload, isUploading }) =
     const fileRef = useRef(null);
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn" onClick={onClose}>
-            <div className="bg-slate-900 border border-white/10 p-5 rounded-2xl w-full max-w-sm shadow-2xl space-y-4 relative" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn" onClick={onClose}>
+          <div className="bg-slate-900 border border-white/10 p-5 rounded-2xl w-full max-w-sm shadow-2xl space-y-4 relative" onClick={e => e.stopPropagation()}>
                 <h4 className="text-sm font-bold text-slate-200 mb-2">새 자료 추가</h4>
                 <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="자료명 (예: 기획안)" className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 text-sm text-slate-200 outline-none focus:border-blue-500"/>
                 <input type="text" value={link} onChange={e => setLink(e.target.value)} placeholder="링크 URL (선택)" className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 text-sm text-slate-200 outline-none focus:border-blue-500"/>
@@ -1225,6 +1225,12 @@ export default function App() {
   const handleSaveNote = () => {
     if (modalMode === 'PROJECT_DETAIL') {
        fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'update_project', projectId: selectedItem.id, note: projectNote }) }).then(() => showToast("메모가 저장되었습니다.", "success"));
+
+       // 프로젝트 메모 상태 즉시 동기화
+       const updatedProjects = data.projects.map(p => p.id === selectedItem.id ? { ...p, note: projectNote } : p);
+       setData(prev => ({ ...prev, projects: updatedProjects }));
+       setSelectedItem(prev => ({ ...prev, note: projectNote }));
+
     } else {
        // Task Note
        updateGlobalTaskState(selectedItem.id, 'note', taskNote);
@@ -1241,6 +1247,13 @@ export default function App() {
     if (isProject) {
         setProjectResources(updatedResources);
         fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'update_project', projectId: selectedItem.id, resources: JSON.stringify(updatedResources) }) });
+
+        // 프로젝트 자료 상태 즉시 동기화
+        const jsonResources = JSON.stringify(updatedResources);
+        const updatedProjects = data.projects.map(p => p.id === selectedItem.id ? { ...p, resources: jsonResources } : p);
+        setData(prev => ({ ...prev, projects: updatedProjects }));
+        setSelectedItem(prev => ({ ...prev, resources: jsonResources }));
+
     } else {
         setTaskResources(updatedResources);
         updateGlobalTaskState(selectedItem.id, 'resources', JSON.stringify(updatedResources));
@@ -1259,6 +1272,13 @@ export default function App() {
     if (isProject) {
         setProjectResources(updatedResources);
         fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'update_project', projectId: selectedItem.id, resources: JSON.stringify(updatedResources) }) });
+
+        // 프로젝트 자료 삭제 상태 즉시 동기화
+        const jsonResources = JSON.stringify(updatedResources);
+        const updatedProjects = data.projects.map(p => p.id === selectedItem.id ? { ...p, resources: jsonResources } : p);
+        setData(prev => ({ ...prev, projects: updatedProjects }));
+        setSelectedItem(prev => ({ ...prev, resources: jsonResources }));
+
     } else {
         setTaskResources(updatedResources);
         updateGlobalTaskState(selectedItem.id, 'resources', JSON.stringify(updatedResources));
