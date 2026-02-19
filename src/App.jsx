@@ -931,6 +931,7 @@ export default function App() {
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [taskPriority, setTaskPriority] = useState("Medium");
   const [taskDueDate, setTaskDueDate] = useState("");
+  const [cascadeDateChange, setCascadeDateChange] = useState(true);
   const [projectStatus, setProjectStatus] = useState("Active");
   const [quickTaskTitle, setQuickTaskTitle] = useState("");
   const [quickTaskPriority, setQuickTaskPriority] = useState("Medium");
@@ -1116,6 +1117,7 @@ export default function App() {
     setNewTaskGuide(task.description || "");
     setTaskPriority(task.priority); 
     setTaskDueDate(task.dueDate || ""); 
+    setCascadeDateChange(true);
     setSelectedProjectId(task.projectId); 
     setModalMode('EDIT_TASK'); 
   };
@@ -1124,7 +1126,7 @@ export default function App() {
     }
     setIsSaving(true); 
     const action = modalMode === 'EDIT_TASK' ? 'update_task' : 'create_task';
-    const body = { action: action, title: newTaskTitle, description: newTaskGuide, context: context, projectId: selectedProjectId, priority: taskPriority, dueDate: taskDueDate };
+    const body = { action: action, title: newTaskTitle, description: newTaskGuide, context: context, projectId: selectedProjectId, priority: taskPriority, dueDate: taskDueDate, cascadeDateChange: cascadeDateChange };
     if (modalMode === 'EDIT_TASK') body.taskId = selectedItem.id; 
     
     fetch(API_URL, { method: "POST", body: JSON.stringify(body) }).then(() => { 
@@ -2542,8 +2544,36 @@ const filteredStudies = studies.filter(item =>
           </div>
           {context === 'WORK' && (<div><label className="block text-xs font-bold text-slate-500 mb-2 uppercase">연관 프로젝트</label><select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className="w-full p-4 rounded-xl bg-slate-800 border-2 border-slate-700 focus:border-indigo-500 outline-none font-medium text-slate-200 appearance-none"><option value="">(연결 안 함)</option>{projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}</select></div>)}
           <div className="grid grid-cols-2 gap-4">
-            <div><label className="block text-xs font-bold text-slate-500 mb-2 uppercase">마감일</label><input type="date" value={taskDueDate} onChange={(e) => setTaskDueDate(e.target.value)} className="w-full p-4 rounded-xl bg-slate-800 border-2 border-slate-700 focus:border-indigo-500 outline-none font-medium text-slate-200" /></div>
-            <div><label className="block text-xs font-bold text-slate-500 mb-2 uppercase">중요도</label><select value={taskPriority} onChange={(e) => setTaskPriority(e.target.value)} className="w-full p-4 rounded-xl bg-slate-800 border-2 border-slate-700 focus:border-indigo-500 outline-none font-medium text-slate-200"><option value="High">🔴 긴급 (High)</option><option value="Review">🟣 검토 (Review)</option><option value="Medium">🔵 보통 (Medium)</option><option value="Hold">🟠 보류 (Hold)</option><option value="Low">⚪ 낮음 (Low)</option></select></div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">마감일</label>
+              <input type="date" value={taskDueDate} onChange={(e) => setTaskDueDate(e.target.value)} className="w-full p-4 rounded-xl bg-slate-800 border-2 border-slate-700 focus:border-indigo-500 outline-none font-medium text-slate-200" />
+              
+              {/* 👇 연쇄 이동 체크박스 추가 (수정 모드일 때만 표시) */}
+              {modalMode === 'EDIT_TASK' && (
+                <div className="mt-3 flex items-center gap-2 px-1 animate-fadeIn">
+                  <input 
+                    type="checkbox" 
+                    id="cascadeDate" 
+                    checked={cascadeDateChange} 
+                    onChange={(e) => setCascadeDateChange(e.target.checked)} 
+                    className="w-4 h-4 rounded border-slate-600 text-indigo-500 focus:ring-indigo-500 bg-slate-700 cursor-pointer" 
+                  />
+                  <label htmlFor="cascadeDate" className="text-xs text-slate-400 cursor-pointer hover:text-slate-200 font-bold">
+                    이후 일정 자동 동기화 (연기/당김)
+                  </label>
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">중요도</label>
+              <select value={taskPriority} onChange={(e) => setTaskPriority(e.target.value)} className="w-full p-4 rounded-xl bg-slate-800 border-2 border-slate-700 focus:border-indigo-500 outline-none font-medium text-slate-200">
+                <option value="High">🔴 긴급 (High)</option>
+                <option value="Review">🟣 검토 (Review)</option>
+                <option value="Medium">🔵 보통 (Medium)</option>
+                <option value="Hold">🟠 보류 (Hold)</option>
+                <option value="Low">⚪ 낮음 (Low)</option>
+              </select>
+            </div>
           </div>
           <div><label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Task Name</label><div className="flex gap-2"><input type="text" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="할 일 입력" className="flex-1 p-4 rounded-xl bg-slate-800 border-2 border-slate-700 focus:border-indigo-500 focus:bg-slate-700 transition-colors outline-none font-medium text-slate-200" autoFocus /><VoiceButton onSpeech={(text) => setNewTaskTitle(text)} /></div></div>
           {/* Guide Input Area */}
