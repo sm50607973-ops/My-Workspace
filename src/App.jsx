@@ -885,6 +885,10 @@ export default function App() {
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
 
+  // 체크리스트 드래그 앤 드롭을 위한 Ref 변수 선언
+  const dragSubTaskItem = useRef(null);
+  const dragOverSubTaskItem = useRef(null);
+
   const [newProjectTitle, setNewProjectTitle] = useState("");
   const [projectStartDate, setProjectStartDate] = useState(new Date().toISOString().substring(0, 10)); 
   const [projectDueDate, setProjectDueDate] = useState(""); 
@@ -932,6 +936,10 @@ export default function App() {
   const [taskResources, setTaskResources] = useState([]);
   const [taskSubTasks, setTaskSubTasks] = useState([]);
   const [newTaskSubTaskTitle, setNewTaskSubTaskTitle] = useState("");
+
+  // 체크리스트 수정을 위한 State 변수
+  const [editingSubtaskIndex, setEditingSubtaskIndex] = useState(null);
+  const [editingSubtaskText, setEditingSubtaskText] = useState("");
 
   const [newResourceLink, setNewResourceLink] = useState("");
   const [newResourceName, setNewResourceName] = useState("");
@@ -1386,6 +1394,87 @@ export default function App() {
       updateGlobalTaskState(selectedItem.id, 'subTasks', JSON.stringify(updated));
       fetch(API_URL, { method: "POST", body: JSON.stringify({ action: 'update_task', taskId: selectedItem.id, subTasks: JSON.stringify(updated) }) });
   };
+
+  // 1. 드래그 시작: 현재 잡은 항목의 인덱스 저장
+  const handleSubTaskDragStart = (e, position) => {
+    dragSubTaskItem.current = position;
+  };
+
+  // 2. 드래그 중: 마우스가 다른 항목 위로 올라갔을 때 순서 변경 (시각적 업데이트)
+  const handleSubTaskDragEnter = (e, position) => {
+    e.preventDefault(); // 필수: 드래그 이벤트 전파 방지
+    
+    // 드래그 중인 항목과 타겟 항목이 같으면 무시
+    if (dragSubTaskItem.current === null || dragSubTaskItem.current === position) return;
+
+    const copyListItems = [...taskSubTasks];
+    const dragItemContent = copyListItems[dragSubTaskItem.current];
+    
+    // 배열 순서 재배치
+    copyListItems.splice(dragSubTaskItem.current, 1);
+    copyListItems.splice(position, 0, dragItemContent);
+    
+    // Ref 업데이트 및 State 반영 (즉시 렌더링)
+    dragSubTaskItem.current = position;
+    dragOverSubTaskItem.current = position;
+    setTaskSubTasks(copyListItems);
+  };
+
+  // 3. 드래그 종료: 변경된 순서를 확정하고 서버에 저장
+  const handleSubTaskDragEnd = () => {
+    dragSubTaskItem.current = null;
+    dragOverSubTaskItem.current = null;
+
+    // 최종 변경된 taskSubTasks를 서버 및 전역 상태에 저장
+    updateGlobalTaskState(selectedItem.id, 'subTasks', JSON.stringify(taskSubTasks));
+    
+    fetch(API_URL, { 
+      method: "POST", 
+      body: JSON.stringify({ 
+        action: 'update_task', 
+        taskId: selectedItem.id, 
+        subTasks: JSON.stringify(taskSubTasks) 
+      }) 
+    }).then(() => {
+        // (선택) 저장 완료 토스트 메시지 등을 띄울 수 있음
+        // showToast("순서가 변경되었습니다.", "success");
+    });
+  };
+
+  // 1. 수정 모드 시작 (기존 텍스트를 가져와서 입력창에 세팅)
+  const startEditingSubtask = (idx, currentTitle) => {
+    setEditingSubtaskIndex(idx);
+    setEditingSubtaskText(currentTitle);
+  };
+
+  // 2. 수정 취소 (초기화)
+  const cancelEditingSubtask = () => {
+    setEditingSubtaskIndex(null);
+    setEditingSubtaskText("");
+  };
+
+  // 3. 수정 내용 저장 (서버 동기화)
+  const saveEditingSubtask = (idx) => {
+    if (!editingSubtaskText.trim()) return; // 빈 값 방지
+
+    const updated = [...taskSubTasks];
+    updated[idx].title = editingSubtaskText; // 내용 변경
+    
+    setTaskSubTasks(updated);
+    setEditingSubtaskIndex(null); // 수정 모드 종료
+
+    // 서버 및 전역 상태 동기화
+    updateGlobalTaskState(selectedItem.id, 'subTasks', JSON.stringify(updated));
+    fetch(API_URL, { 
+        method: "POST", 
+        body: JSON.stringify({ 
+            action: 'update_task', 
+            taskId: selectedItem.id, 
+            subTasks: JSON.stringify(updated) 
+        }) 
+    });
+  };
+
   // --- Ref Link Manager Logic ---
   const handleSaveLink = () => {
       if(!linkName.trim() || !linkUrl.trim()) { showToast("이름과 링크 주소는 필수입니다.", "error");
@@ -1953,26 +2042,72 @@ const filteredStudies = studies.filter(item =>
                       const tProgress = getTaskProgress(t);
   
                       return (
-                        <div key={t.id} draggable onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onClick={(e) => openTaskDetailModal(e, t)} 
-                          className="flex items-start gap-3 p-3 bg-slate-800/40 rounded-xl border border-white/5 cursor-move hover:bg-slate-700/50 transition-colors group select-none hover:border-indigo-500/30">
-                          <div className="flex flex-col items-center gap-1 text-slate-500 w-6 mt-1"><GripVertical size={14} className="opacity-0 group-hover:opacity-100 transition-opacity"/><span className="text-[10px] font-bold font-mono">{index + 1}</span></div>
-                          <div className={`mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 ${t.status === 'Done' ? 'bg-emerald-500' : 'bg-slate-500'}`}></div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                                <span className={`text-sm font-bold truncate ${t.status === 'Done' ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{t.title}</span>
+                        <div 
+                            key={t.id} 
+                            draggable 
+                            onDragStart={(e) => handleDragStart(e, index)} 
+                            onDragEnter={(e) => handleDragEnter(e, index)} 
+                            onDragEnd={handleDragEnd} 
+                            onDragOver={(e) => e.preventDefault()}
+                            onClick={(e) => openTaskDetailModal(e, t)} 
+                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-move group hover:shadow-md ${t.status === 'Done' ? 'bg-slate-800/20 border-white/5 opacity-60' : 'bg-slate-800/60 border-white/5 hover:bg-slate-700/80 hover:border-indigo-500/30'}`}
+                        >
+                          
+                          {/* 1. 드래그 핸들 (Grip Icon) - 항상 표시되어 직관성 높임 */}
+                          <div className="text-slate-600 cursor-move hover:text-slate-400 shrink-0 pl-1">
+                              <GripVertical size={16}/>
+                          </div>
+
+                          {/* 2. 완료 상태 토글 (체크박스) - 순번 대신 배치하여 실용성 높임 */}
+                          <div 
+                            onClick={(e) => { e.stopPropagation(); requestToggleTask(t); }} 
+                            className={`shrink-0 p-1 rounded-lg transition-colors cursor-pointer hover:bg-white/5 ${t.status === 'Done' ? 'text-emerald-500' : 'text-slate-600 hover:text-slate-400'}`}
+                          >
+                              {t.status === 'Done' ? <CheckSquare size={20}/> : <Square size={20}/>}
+                          </div>
+
+                          {/* 3. 할 일 정보 (제목 + 메타데이터) */}
+                          <div className="flex-1 min-w-0 flex flex-col justify-center">
+                            <div className="flex items-center gap-2 mb-0.5">
+                                <span className={`text-sm font-bold truncate ${t.status === 'Done' ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
+                                    {t.title}
+                                </span>
+                                {/* 우선순위 뱃지 */}
                                 <PriorityBadge priority={t.priority} />
                             </div>
-                            {t.description && (<p className="text-xs text-slate-400 mt-1 line-clamp-2"><span className="text-indigo-400 font-bold mr-1">GUIDE:</span>{t.description}</p>)}
+                            
+                            {/* 부가 정보: 가이드가 있으면 한 줄 요약 표시 */}
+                            {t.description && (
+                                <p className="text-xs text-slate-500 truncate pr-4">
+                                    <span className="text-indigo-400/70 font-bold mr-1">GUIDE</span>
+                                    {t.description}
+                                </p>
+                            )}
+                            
+                            {/* 진행률 바 (진행 중일 때만 표시) */}
                             {tProgress > 0 && t.status !== 'Done' && (
-                                <div className="flex items-center gap-2 mt-2">
-                                     <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
+                                <div className="flex items-center gap-2 mt-1.5 w-full max-w-[200px]">
+                                    <div className="flex-1 h-1 bg-slate-700/50 rounded-full overflow-hidden">
                                         <div className="h-full bg-indigo-500" style={{width: `${tProgress}%`}}></div>
                                     </div>
-                                    <span className="text-[10px] font-bold text-indigo-400">{tProgress}%</span>
+                                    <span className="text-[9px] font-bold text-indigo-400">{tProgress}%</span>
                                 </div>
                             )}
-                            </div>
-                          {dDay ? (<span className={`text-[10px] font-bold px-2 py-1 rounded-lg whitespace-nowrap mt-0.5 ${dDay.color}`}>{dDay.label}</span>) : (t.dueDate && <span className="text-[10px] font-bold text-slate-500 bg-slate-700/50 px-2 py-1 rounded-lg whitespace-nowrap mt-0.5">{t.dueDate.substring(5)}</span>)}
+                          </div>
+
+                          {/* 4. 마감일 뱃지 (우측 끝 정렬) */}
+                          <div className="shrink-0 flex flex-col items-end gap-1">
+                              {dDay ? (
+                                  <span className={`text-[10px] font-bold px-2 py-1 rounded-lg whitespace-nowrap ${dDay.color}`}>
+                                      {dDay.label}
+                                  </span>
+                              ) : (t.dueDate && (
+                                  <span className="text-[10px] font-bold text-slate-500 bg-slate-700/30 px-2 py-1 rounded-lg whitespace-nowrap flex items-center gap-1">
+                                      {t.dueDate.substring(5)}
+                                  </span>
+                              ))}
+                          </div>
+
                         </div>
                       );
                     })
@@ -2179,14 +2314,69 @@ const filteredStudies = studies.filter(item =>
                        {taskSubTasks.length === 0 ? 
                        <div className="h-20 flex items-center justify-center text-slate-600 text-xs border border-dashed border-slate-800 rounded-xl">체크리스트가 없습니다. 아래에서 추가하세요.</div> :
                        taskSubTasks.map((sub, idx) => (
-                            <div key={idx} className="flex items-center gap-3 p-3 bg-slate-800/30 rounded-xl border border-white/5 group hover:bg-slate-800/50 transition-colors">
-                                <button onClick={() => handleToggleTaskSubTask(idx)} className={`p-1 rounded-lg transition-colors ${sub.done ? 'text-emerald-400' : 'text-slate-600 hover:text-slate-400'}`}>
+                        <div 
+                            key={idx} 
+                            draggable
+                            onDragStart={(e) => handleSubTaskDragStart(e, idx)}
+                            onDragEnter={(e) => handleSubTaskDragEnter(e, idx)}
+                            onDragEnd={handleSubTaskDragEnd}
+                            onDragOver={(e) => e.preventDefault()}
+                            className={`flex items-center gap-3 p-3 bg-slate-800/30 rounded-xl border border-white/5 group transition-colors ${editingSubtaskIndex === idx ? 'ring-1 ring-indigo-500 bg-indigo-500/10' : 'hover:bg-slate-800/50 cursor-move'}`}
+                        >
+                            {/* 드래그 핸들 (수정 모드 아닐 때만 표시) */}
+                            {editingSubtaskIndex !== idx && (
+                                <div className="text-slate-600 cursor-move hover:text-slate-400 shrink-0">
+                                    <GripVertical size={16}/>
+                                </div>
+                            )}
+
+                            {/* 완료 체크 박스 (수정 모드 아닐 때만 표시) */}
+                            {editingSubtaskIndex !== idx && (
+                                <button onClick={() => handleToggleTaskSubTask(idx)} className={`p-1 rounded-lg transition-colors shrink-0 ${sub.done ? 'text-emerald-400' : 'text-slate-600 hover:text-slate-400'}`}>
                                     {sub.done ? <CheckSquare size={20}/> : <Square size={20}/>}
                                 </button>
-                                <span className={`flex-1 text-sm transition-all ${sub.done ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{sub.title}</span>
-                                <button onClick={() => handleDeleteTaskSubTask(idx)} className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button>
-                            </div>
-                        ))}
+                            )}
+                            
+                            {/* 🌟 핵심 로직: 수정 중이면 Input 표시, 아니면 텍스트 표시 */}
+                            {editingSubtaskIndex === idx ? (
+                                // [수정 모드 UI] 입력창 + 저장/취소 버튼
+                                <div className="flex-1 flex items-center gap-2 animate-fadeIn">
+                                    <input 
+                                        type="text" 
+                                        value={editingSubtaskText} 
+                                        onChange={(e) => setEditingSubtaskText(e.target.value)}
+                                        className="flex-1 bg-slate-900 border border-indigo-500 rounded-lg px-2 py-1 text-sm text-white outline-none"
+                                        autoFocus
+                                        onKeyPress={(e) => e.key === 'Enter' && saveEditingSubtask(idx)}
+                                    />
+                                    <button onClick={() => saveEditingSubtask(idx)} className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors" title="저장"><Check size={14}/></button>
+                                    <button onClick={cancelEditingSubtask} className="p-1.5 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors" title="취소"><X size={14}/></button>
+                                </div>
+                            ) : (
+                                // [일반 보기 UI] 텍스트 + 수정/삭제 버튼
+                                <>
+                                    <span 
+                                        onDoubleClick={() => startEditingSubtask(idx, sub.title)} // 더블클릭 시 수정 모드 진입
+                                        className={`flex-1 text-sm transition-all select-none ${sub.done ? 'text-slate-500 line-through' : 'text-slate-200'}`}
+                                    >
+                                        {sub.title}
+                                    </span>
+                                    
+                                    {/* 우측 액션 버튼들 (Hover 시 등장) */}
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        {/* 👉 수정 버튼 추가됨 */}
+                                        <button onClick={() => startEditingSubtask(idx, sub.title)} className="p-1.5 text-slate-500 hover:text-indigo-400 bg-slate-700/30 hover:bg-slate-700 rounded-lg transition-colors" title="수정">
+                                            <Edit2 size={14}/>
+                                        </button>
+                                        <button onClick={() => handleDeleteTaskSubTask(idx)} className="p-1.5 text-slate-500 hover:text-red-400 bg-slate-700/30 hover:bg-slate-700 rounded-lg transition-colors" title="삭제">
+                                            <Trash2 size={14}/>
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    ))
+                 }
                      </div>
 
                     <div className="flex gap-2 mt-auto pt-4 border-t border-white/5 sticky bottom-0 bg-[#0f172a]">
