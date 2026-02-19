@@ -1072,7 +1072,6 @@ export default function App() {
         
          setIsResourceOpen(true);
          setIsNoteOpen(true);
-         setOpenResultIndexes({});
       }
     }
   }, [selectedItem, data, modalMode]);
@@ -1092,6 +1091,7 @@ export default function App() {
       if(e) e.stopPropagation();
       setSelectedItem(task);
       setModalMode('TASK_DETAIL');
+      setOpenResultIndexes({});
   }
 
   const openEditTaskModal = (e, task, returnPid = null) => { 
